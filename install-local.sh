@@ -18,7 +18,7 @@ case "$(uname)" in
   Darwin) CONFIG_ROOT="$HOME/Library/Application Support/JetBrains" ;;
   *)      CONFIG_ROOT="$HOME/.config/JetBrains" ;;
 esac
-CONFIG=$(ls -td "$CONFIG_ROOT"/{IntelliJIdea,IdeaIC}* 2>/dev/null | head -1)
+CONFIG=$( (ls -td "$CONFIG_ROOT"/IntelliJIdea* "$CONFIG_ROOT"/IdeaIC* 2>/dev/null || true) | head -1)
 [[ -n "$CONFIG" ]] || { echo "no IntelliJ config dir under $CONFIG_ROOT — launch the IDE once first"; exit 1; }
 
 mkdir -p "$CONFIG/plugins"
