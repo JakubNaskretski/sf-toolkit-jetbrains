@@ -4,7 +4,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.fileTypes.PlainTextLanguage
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
@@ -12,7 +12,7 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.LanguageTextField
+import com.intellij.ui.EditorTextField
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -20,6 +20,7 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.util.ui.JBFont
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
+import dev.skrety.sftoolkit.filetypes.ApexFileType
 import dev.skrety.sftoolkit.ui.OrgCombo
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -40,8 +41,13 @@ class ApexToolWindowFactory : ToolWindowFactory, DumbAware {
 
 class ApexPanel(private val project: Project) : Disposable {
 
-    private val codeField =
-        LanguageTextField(PlainTextLanguage.INSTANCE, project, "System.debug('hello');", false)
+    private val codeField = EditorTextField(
+        EditorFactory.getInstance().createDocument("System.debug('hello');"),
+        project,
+        ApexFileType,
+        false,
+        false,
+    )
     private val orgCombo = OrgCombo(project)
     private val runButton = JButton("Run").apply {
         toolTipText = "Execute anonymous Apex (Ctrl/Cmd+Enter). Click again to cancel."

@@ -39,11 +39,8 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
     fun readObjectNames(): List<String>? {
         val file = objectsFile
         if (!isFresh(file)) return null
-        return try {
-            gson.fromJson(Files.readString(file), Array<String>::class.java)?.toList()
-                ?.takeIf { it.isNotEmpty() }
-        } catch (_: Exception) {
-            null
+        return memoized(file) { text ->
+            gson.fromJson(text, Array<String>::class.java)?.toList()?.takeIf { it.isNotEmpty() }
         }
     }
 
@@ -55,11 +52,9 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
     fun readDescribe(objectName: String): ObjectSchema? {
         val file = describeFile(objectName)
         if (!isFresh(file)) return null
-        return try {
-            gson.fromJson(Files.readString(file), ObjectSchema::class.java)
+        return memoized(file) { text ->
+            gson.fromJson(text, ObjectSchema::class.java)
                 ?.takeIf { it.name.isNotBlank() && it.fields.isNotEmpty() }
-        } catch (_: Exception) {
-            null
         }
     }
 
@@ -79,5 +74,21 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
         const val DEFAULT_MAX_AGE_MS: Long = 7L * 24 * 3600 * 1000
 
         fun sanitizeFileName(name: String): String = name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+
+        // Completion reads these on every keystroke — parse each file once per mtime.
+        private val memo = java.util.concurrent.ConcurrentHashMap<Path, Pair<Long, Any>>()
+
+        @Suppress("UNCHECKED_CAST")
+        private fun <T : Any> memoized(file: Path, parse: (String) -> T?): T? = try {
+            val mtime = Files.getLastModifiedTime(file).toMillis()
+            val hit = memo[file]
+            if (hit != null && hit.first == mtime) hit.second as T
+            else parse(Files.readString(file))?.also {
+                if (memo.size > 512) memo.clear() // ponytail: crude cap; LRU if it ever matters
+                memo[file] = mtime to it
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 }

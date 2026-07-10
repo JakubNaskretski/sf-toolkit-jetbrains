@@ -34,9 +34,10 @@ Requirements on the machine running the IDE:
 - **Apex Language Server** integration through LSP4IJ: completion,
   go-to-definition, hover, references, diagnostics
 - **SOQL tool window** — cancellable queries, auto-LIMIT toggle, flattened
-  result table with sorting and speed search, and **schema-aware completion**
-  (Ctrl+Space): sync the org's object list once, field completion learns each
-  object automatically the first time you query it (offline cache, per org)
+  result table with sorting and speed search, and **schema-aware completion
+  that pops up as you type** (Ctrl+Space also works): sync the org's object
+  list once, field completion learns each object automatically the first time
+  you query it (offline cache, per org); the query editor is syntax-colored
 - **Anonymous Apex tool window** — run snippets against the org; compile errors
   with line/column, runtime exceptions with stack trace, full debug log
 - **Apex test runner** — right-click a test class → Run Apex Tests in Class;
