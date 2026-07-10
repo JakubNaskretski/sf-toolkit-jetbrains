@@ -76,20 +76,23 @@ fun sourceFailureLines(files: List<com.google.gson.JsonObject>): List<String> =
     files.filter { it.str("state").equals("Failed", ignoreCase = true) }
         .map { "${it.str("type") ?: "?"} ${it.str("fullName") ?: "?"}: ${it.str("error") ?: "unknown error"}" }
 
-/** Shared result reporting: balloon summary, per-component failures to the SF Log. */
-fun reportSourceResult(project: Project, res: SfResult, org: String, pastVerb: String) {
+/** Balloon summary + per-component failures to the SF Log (also used for aggregated batches). */
+fun notifySourceOutcome(
+    project: Project,
+    org: String,
+    pastVerb: String,
+    fileCount: Int,
+    failureLines: List<String>,
+    fallbackError: String? = null,
+) {
     val group = NotificationGroupManager.getInstance().getNotificationGroup("SF Toolkit")
-    val log = SfLog.get(project)
-    val files = sourceFiles(res.resultObj())
-    val failureLines = sourceFailureLines(files)
-
-    if (res.ok && failureLines.isEmpty()) {
-        val summary = if (files.isNotEmpty()) "${files.size} component file(s)" else "done"
+    if (failureLines.isEmpty() && fallbackError == null) {
+        val summary = if (fileCount > 0) "$fileCount component file(s)" else "done"
         group.createNotification("$pastVerb $summary — $org", NotificationType.INFORMATION).notify(project)
         return
     }
-
-    val allLines = failureLines.ifEmpty { listOf(res.errorMessage()) }
+    val log = SfLog.get(project)
+    val allLines = failureLines.ifEmpty { listOf(fallbackError ?: "unknown error") }
     allLines.forEach { log.error(it) }
     group.createNotification(
         "$pastVerb failed — $org",
@@ -97,6 +100,17 @@ fun reportSourceResult(project: Project, res: SfResult, org: String, pastVerb: S
             (if (allLines.size > 3) "<br/>…and ${allLines.size - 3} more (see SF Log)" else ""),
         NotificationType.ERROR,
     ).notify(project)
+}
+
+/** Shared result reporting for a single CLI invocation. */
+fun reportSourceResult(project: Project, res: SfResult, org: String, pastVerb: String) {
+    val files = sourceFiles(res.resultObj())
+    val failureLines = sourceFailureLines(files)
+    if (res.ok && failureLines.isEmpty()) {
+        notifySourceOutcome(project, org, pastVerb, files.size, emptyList())
+    } else {
+        notifySourceOutcome(project, org, pastVerb, files.size, failureLines, res.errorMessage())
+    }
 }
 
 class RetrieveAction : SourceCliAction("Retrieving from org…", "Retrieved") {

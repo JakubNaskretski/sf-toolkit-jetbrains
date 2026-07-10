@@ -31,6 +31,9 @@
         <toolWindow id="SOQL" anchor="bottom"
                     icon="AllIcons.Nodes.DataTables"
                     factoryClass="dev.skrety.sftoolkit.soql.SoqlToolWindowFactory"/>
+        <toolWindow id="SF Metadata" anchor="right"
+                    icon="AllIcons.Toolwindows.ToolWindowStructure"
+                    factoryClass="dev.skrety.sftoolkit.metadata.MetadataToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
     </extensions>
 

@@ -37,3 +37,10 @@ fun toolingRefFor(fileName: String, parentDirName: String?): ToolingRef? {
     if (!NAME_RE.matches(name)) return null
     return ToolingRef(type, name)
 }
+
+/** Same guardrails, addressed by metadata type name (used by the metadata browser). */
+fun toolingRefForTypeName(metadataType: String, name: String): ToolingRef? {
+    val type = TOOLING_BY_DIR.values.firstOrNull { it.sObject == metadataType } ?: return null
+    if (!NAME_RE.matches(name)) return null
+    return ToolingRef(type, name)
+}
