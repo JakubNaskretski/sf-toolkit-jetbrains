@@ -50,7 +50,7 @@ class ApexPanel(private val project: Project) : Disposable {
     )
     // Local selection: each tab targets its own org (IC2-style), project org untouched.
     private val orgCombo = OrgCombo(project, syncToProject = false)
-    private val runButton = JButton("Run").apply {
+    private val runButton = JButton("Run", com.intellij.icons.AllIcons.Actions.Execute).apply {
         toolTipText = "Execute anonymous Apex (Ctrl/Cmd+Enter). Click again to cancel."
     }
     private val statusLabel = JBLabel(" ").apply { setCopyable(true) }
@@ -92,7 +92,8 @@ class ApexPanel(private val project: Project) : Disposable {
             }
         }.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER", "meta ENTER"), codeField)
 
-        return OnePixelSplitter(true, 0.4f).apply {
+        statusLabel.border = com.intellij.util.ui.JBUI.Borders.empty(3, 8)
+        return OnePixelSplitter(true, "sfToolkit.apex.splitter", 0.4f).apply {
             firstComponent = top
             secondComponent = bottom
         }
@@ -114,6 +115,7 @@ class ApexPanel(private val project: Project) : Disposable {
         inFlight = true
         cancelRequested = false
         runButton.text = "Cancel"
+        runButton.icon = com.intellij.icons.AllIcons.Actions.Suspend
         statusLabel.text = "Running against $org…"
 
         object : Task.Backgroundable(project, "Anonymous Apex", true) {
@@ -159,6 +161,7 @@ class ApexPanel(private val project: Project) : Disposable {
                 runningIndicator = null
                 inFlight = false
                 runButton.text = "Run"
+                runButton.icon = com.intellij.icons.AllIcons.Actions.Execute
             }
         }.queue()
     }

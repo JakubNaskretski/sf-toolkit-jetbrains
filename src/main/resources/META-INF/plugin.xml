@@ -36,8 +36,11 @@
         <toolWindow id="SOQL" anchor="bottom" canCloseContents="true"
                     icon="AllIcons.Nodes.DataTables"
                     factoryClass="dev.skrety.sftoolkit.soql.SoqlToolWindowFactory"/>
-        <toolWindow id="SF Metadata" anchor="right"
-                    icon="AllIcons.Toolwindows.ToolWindowStructure"
+        <toolWindow id="SF Toolkit" anchor="left"
+                    icon="/icons/sfCloud.svg"
+                    factoryClass="dev.skrety.sftoolkit.ui.HubToolWindowFactory"/>
+        <toolWindow id="SF Metadata" anchor="left" secondary="true"
+                    icon="/icons/sfMetadata.svg"
                     factoryClass="dev.skrety.sftoolkit.metadata.MetadataToolWindowFactory"/>
         <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true" canCloseContents="true"
                     icon="AllIcons.Actions.Execute"

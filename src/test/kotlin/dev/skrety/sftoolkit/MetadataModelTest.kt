@@ -34,6 +34,18 @@ class MetadataModelTest {
     }
 
     @Test
+    fun `percent-encoded names decode for display only`() {
+        assertEquals(
+            "Case-Case (Support) Layout",
+            dev.skrety.sftoolkit.metadata.decodeMetaName("Case-Case %28Support%29 Layout"),
+        )
+        // '+' must stay literal (URLDecoder would eat it)
+        assertEquals("A+B", dev.skrety.sftoolkit.metadata.decodeMetaName("A+B"))
+        assertEquals("Plain Name", dev.skrety.sftoolkit.metadata.decodeMetaName("Plain Name"))
+        assertEquals("Bad%GG", dev.skrety.sftoolkit.metadata.decodeMetaName("Bad%GG"))
+    }
+
+    @Test
     fun `org list result handles array, single object and junk`() {
         val arr = JsonParser.parseString(
             """[{"fullName":"A"},{"fullName":"B"},{"noName":true}]""",

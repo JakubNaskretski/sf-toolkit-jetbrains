@@ -59,7 +59,7 @@ class SoqlPanel(private val project: Project) : Disposable {
     private val autoLimit = JBCheckBox("Auto LIMIT 200", true).apply {
         toolTipText = "Append LIMIT 200 when the query has no top-level LIMIT"
     }
-    private val runButton = JButton("Run").apply {
+    private val runButton = JButton("Run", com.intellij.icons.AllIcons.Actions.Execute).apply {
         toolTipText = "Run query (Ctrl/Cmd+Enter). Click again to cancel."
     }
     private val exportButton = JButton("Export CSV").apply {
@@ -143,7 +143,8 @@ class SoqlPanel(private val project: Project) : Disposable {
             true,
         )
 
-        return OnePixelSplitter(true, 0.3f).apply {
+        statusLabel.border = com.intellij.util.ui.JBUI.Borders.empty(3, 8)
+        return OnePixelSplitter(true, "sfToolkit.soql.splitter", 0.3f).apply {
             firstComponent = top
             secondComponent = bottom
         }
@@ -187,6 +188,7 @@ class SoqlPanel(private val project: Project) : Disposable {
         inFlight = true
         cancelRequested = false
         runButton.text = "Cancel"
+        runButton.icon = com.intellij.icons.AllIcons.Actions.Suspend
         statusLabel.text = "Running against $org…"
 
         object : Task.Backgroundable(project, "SOQL query", true) {
@@ -241,6 +243,7 @@ class SoqlPanel(private val project: Project) : Disposable {
                 runningIndicator = null
                 inFlight = false
                 runButton.text = "Run"
+                runButton.icon = com.intellij.icons.AllIcons.Actions.Execute
             }
         }.queue()
     }

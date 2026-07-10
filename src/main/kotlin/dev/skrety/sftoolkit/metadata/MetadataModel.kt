@@ -113,6 +113,24 @@ fun orgListNames(resultEl: JsonElement?): List<String> {
     return objects.mapNotNull { it.str("fullName")?.takeIf { n -> n.isNotBlank() } }
 }
 
+/**
+ * Display form of percent-encoded fullNames (`Case-Case %28Support%29 Layout` →
+ * `Case-Case (Support) Layout`). Only %XX runs are decoded ('+' stays literal —
+ * URLDecoder would corrupt it); raw names remain the CLI/merge keys.
+ */
+fun decodeMetaName(raw: String): String {
+    if (!raw.contains('%')) return raw
+    return try {
+        Regex("(?:%[0-9A-Fa-f]{2})+").replace(raw) { match ->
+            val bytes = match.value.split('%').filter { it.isNotEmpty() }
+                .map { it.toInt(16).toByte() }.toByteArray()
+            String(bytes, Charsets.UTF_8)
+        }
+    } catch (_: Exception) {
+        raw
+    }
+}
+
 /** Merges local scan + org listings into browser rows, sorted by type then name. */
 fun mergeRows(
     local: Map<String, Map<String, String>>,
