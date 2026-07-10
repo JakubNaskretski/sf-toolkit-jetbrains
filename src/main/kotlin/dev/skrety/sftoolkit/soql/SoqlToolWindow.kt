@@ -1,5 +1,7 @@
 package dev.skrety.sftoolkit.soql
 
+import com.intellij.icons.AllIcons
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
@@ -9,10 +11,12 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.LanguageTextField
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.TableSpeedSearch
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
@@ -20,8 +24,10 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.table.JBTable
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
+import dev.skrety.sftoolkit.refreshOrgsInBackground
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -32,21 +38,41 @@ class SoqlToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = SoqlPanel(project)
         val content = ContentFactory.getInstance().createContent(panel.component, "", false)
+        content.setDisposer(panel)
         toolWindow.contentManager.addContent(content)
     }
 }
 
-class SoqlPanel(private val project: Project) {
+class SoqlPanel(private val project: Project) : Disposable {
 
     private val queryField =
         LanguageTextField(PlainTextLanguage.INSTANCE, project, "SELECT Id, Name FROM Account", false)
-    private val autoLimit = JBCheckBox("Auto LIMIT 200", true)
-    private val runButton = JButton("Run")
-    private val statusLabel = JBLabel(" ")
+    private val orgCombo = ComboBox<String>().apply {
+        toolTipText = "Org this query runs against (also updates the project-wide selection)"
+        setMinimumAndPreferredWidth(220)
+    }
+    private val refreshOrgsButton = JButton(AllIcons.Actions.Refresh).apply {
+        toolTipText = "Refresh org list"
+        isFocusable = false
+    }
+    private val autoLimit = JBCheckBox("Auto LIMIT 200", true).apply {
+        toolTipText = "Append LIMIT 200 when the query has no top-level LIMIT"
+    }
+    private val runButton = JButton("Run").apply {
+        toolTipText = "Run query (Ctrl/Cmd+Enter). Click again to cancel."
+    }
+    private val statusLabel = JBLabel(" ").apply { setCopyable(true) }
     private val tableModel = object : DefaultTableModel() {
         override fun isCellEditable(row: Int, column: Int): Boolean = false
     }
-    private val table = JBTable(tableModel).apply { autoResizeMode = JTable.AUTO_RESIZE_OFF }
+    private val table = JBTable(tableModel).apply {
+        autoResizeMode = JTable.AUTO_RESIZE_OFF
+        autoCreateRowSorter = true
+        emptyText.text = "No results — run a query (Ctrl/Cmd+Enter)"
+    }
+
+    private val orgListener = Runnable { refreshOrgCombo() }
+    private var updatingCombo = false
 
     @Volatile
     private var runningIndicator: ProgressIndicator? = null
@@ -64,6 +90,9 @@ class SoqlPanel(private val project: Project) {
     private fun build(): JComponent {
         val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
             add(runButton)
+            add(JBLabel("Org:"))
+            add(orgCombo)
+            add(refreshOrgsButton)
             add(autoLimit)
         }
         val top = JPanel(BorderLayout()).apply {
@@ -74,16 +103,51 @@ class SoqlPanel(private val project: Project) {
             add(JBScrollPane(table), BorderLayout.CENTER)
             add(statusLabel, BorderLayout.SOUTH)
         }
+        TableSpeedSearch.installOn(table)
+
         runButton.addActionListener { toggleRun() }
+        refreshOrgsButton.addActionListener { refreshOrgsInBackground(project) }
+        orgCombo.addActionListener {
+            if (!updatingCombo) {
+                val selected = orgCombo.selectedItem as? String
+                if (!selected.isNullOrBlank() && selected != OrgService.get(project).current) {
+                    OrgService.get(project).current = selected
+                }
+            }
+        }
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) {
                 if (!inFlight) toggleRun()
             }
         }.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER", "meta ENTER"), queryField)
 
+        val orgService = OrgService.get(project)
+        orgService.addChangeListener(orgListener)
+        refreshOrgCombo()
+        if (orgService.orgs.isEmpty()) refreshOrgsInBackground(project, quiet = true)
+
         return OnePixelSplitter(true, 0.3f).apply {
             firstComponent = top
             secondComponent = bottom
+        }
+    }
+
+    override fun dispose() {
+        OrgService.get(project).removeChangeListener(orgListener)
+    }
+
+    /** Mirrors OrgService into the combo; the combo is the panel's org switcher. */
+    private fun refreshOrgCombo() {
+        updatingCombo = true
+        try {
+            val orgService = OrgService.get(project)
+            val items = orgService.orgs.map { it.display }.toMutableList()
+            val current = orgService.current
+            if (current != null && current !in items) items.add(0, current)
+            orgCombo.model = DefaultComboBoxModel(items.toTypedArray())
+            orgCombo.selectedItem = current
+        } finally {
+            updatingCombo = false
         }
     }
 
@@ -132,6 +196,7 @@ class SoqlPanel(private val project: Project) {
                             .toTypedArray()
                         app.invokeLater {
                             tableModel.setDataVector(data, cols.map { it as Any }.toTypedArray())
+                            autoSizeColumns(cols, rows)
                             statusLabel.text = "$total row(s) — $org" +
                                 if (records.size > MAX_ROWS) " (showing first $MAX_ROWS)" else ""
                         }
@@ -145,6 +210,17 @@ class SoqlPanel(private val project: Project) {
                 runButton.text = "Run"
             }
         }.queue()
+    }
+
+    private fun autoSizeColumns(cols: List<String>, rows: List<Map<String, String>>) {
+        val metrics = table.getFontMetrics(table.font)
+        for ((i, col) in cols.withIndex()) {
+            var width = metrics.stringWidth(col) + 24
+            for (row in rows.take(100)) {
+                width = maxOf(width, metrics.stringWidth(row[col] ?: "") + 16)
+            }
+            table.columnModel.getColumn(i).preferredWidth = width.coerceIn(80, 360)
+        }
     }
 
     companion object {

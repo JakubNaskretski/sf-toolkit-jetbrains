@@ -43,6 +43,7 @@ class OrgStatusBarWidget(private val project: Project) :
         val step = object : BaseListPopupStep<Item>("Salesforce Org", items) {
             override fun getTextFor(value: Item): String = when (value) {
                 is Item.OrgItem -> buildString {
+                    if (value.org.display == orgService.current) append("✓ ")
                     append(value.org.display)
                     if (value.org.alias != null) append(" (").append(value.org.username).append(")")
                     if (value.org.isScratch) append(" [scratch]")

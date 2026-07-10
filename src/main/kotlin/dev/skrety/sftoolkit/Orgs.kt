@@ -67,18 +67,32 @@ class OrgService(private val project: Project) :
     var orgs: List<SfOrg> = emptyList()
         private set
 
+    private val changeListeners = java.util.concurrent.CopyOnWriteArrayList<Runnable>()
+
+    /** Listener fires on the EDT whenever the org list or current org changes. */
+    fun addChangeListener(listener: Runnable) {
+        changeListeners += listener
+    }
+
+    fun removeChangeListener(listener: Runnable) {
+        changeListeners -= listener
+    }
+
     /** Alias (or username) passed to `sf -o`. Persisted per-project in workspace.xml. */
     var current: String?
         get() = state.current
         set(value) {
             state.current = value
-            updateWidget()
+            notifyChangedOnEdt()
         }
 
     /** Blocking — call from a background thread. [quiet] for unsolicited (startup) refreshes. */
     fun refreshOrgs(indicator: ProgressIndicator? = null, quiet: Boolean = false): List<SfOrg> {
         val res = SfCli.get(project).execute(listOf("org", "list"), indicator, quiet = quiet)
-        if (res.ok) orgs = parseOrgList(res.resultObj())
+        if (res.ok) {
+            orgs = parseOrgList(res.resultObj())
+            notifyChangedOnEdt()
+        }
         return orgs
     }
 
@@ -95,10 +109,11 @@ class OrgService(private val project: Project) :
         return null
     }
 
-    private fun updateWidget() {
+    private fun notifyChangedOnEdt() {
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) {
                 WindowManager.getInstance().getStatusBar(project)?.updateWidget(ORG_WIDGET_ID)
+                changeListeners.forEach { it.run() }
             }
         }
     }
@@ -115,10 +130,7 @@ fun refreshOrgsInBackground(project: Project, quiet: Boolean = false, onDone: (L
         override fun run(indicator: ProgressIndicator) {
             val orgs = OrgService.get(project).refreshOrgs(indicator, quiet)
             ApplicationManager.getApplication().invokeLater {
-                if (!project.isDisposed) {
-                    WindowManager.getInstance().getStatusBar(project)?.updateWidget(OrgService.ORG_WIDGET_ID)
-                    onDone(orgs)
-                }
+                if (!project.isDisposed) onDone(orgs)
             }
         }
     }.queue()
