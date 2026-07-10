@@ -39,6 +39,12 @@
                     factoryClass="dev.skrety.sftoolkit.apex.ApexToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
         <customScopesProvider implementation="dev.skrety.sftoolkit.SfSearchScopes"/>
+        <!-- Icons + Settings→File Types entries; highlighting delegated to TextMate
+             (see sf-toolkit-textmate.xml). -->
+        <fileType name="Apex" implementationClass="dev.skrety.sftoolkit.filetypes.ApexFileType"
+                  fieldName="INSTANCE" extensions="cls;trigger;apex"/>
+        <fileType name="SOQL" implementationClass="dev.skrety.sftoolkit.filetypes.SoqlFileType"
+                  fieldName="INSTANCE" extensions="soql"/>
     </extensions>
 
     <actions>

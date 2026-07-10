@@ -28,8 +28,9 @@ Requirements on the machine running the IDE:
   source-format projects
 - **Compare with Org** — diffs the local Apex class/trigger/VF page/component
   against the org version in the IDE's native diff viewer
-- **Apex/SOQL syntax highlighting** (TextMate grammars from
-  forcedotcom/apex-tmLanguage, BSD-3-Clause)
+- **Apex/SOQL file types + syntax highlighting** — `.cls`/`.trigger`/`.apex`/`.soql`
+  get real file types (icons, Settings → File Types entry) with highlighting
+  delegated to the TextMate grammars (forcedotcom/apex-tmLanguage, BSD-3-Clause)
 - **Apex Language Server** integration through LSP4IJ: completion,
   go-to-definition, hover, references, diagnostics
 - **SOQL tool window** — cancellable queries, auto-LIMIT toggle, flattened
