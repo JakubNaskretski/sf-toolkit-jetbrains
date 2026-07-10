@@ -99,7 +99,7 @@ class SoqlPanel(private val project: Project) : Disposable {
     val component: JComponent = build()
 
     private fun build(): JComponent {
-        val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
+        val toolbar = JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 8, 4)).apply {
             add(runButton)
         }
         orgCombo.addTo(toolbar)

@@ -45,7 +45,7 @@ class HubPanel(private val project: Project) : Disposable {
             border = JBUI.Borders.empty(8, 10)
 
             add(TitledSeparator("Org"))
-            add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).also { orgCombo.addTo(it) })
+            add(JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 6, 2)).also { orgCombo.addTo(it) })
             add(actionButton("Log In to New Org…", AllIcons.General.User) { LoginAction.run(project) })
 
             add(TitledSeparator("Windows"))

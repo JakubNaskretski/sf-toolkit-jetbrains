@@ -131,12 +131,12 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
     }
 
     private fun build(): JComponent {
-        val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 6, 4)).apply {
+        val toolbar = JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 6, 4)).apply {
             add(listButton)
             add(typesButton)
         }
         orgCombo.addTo(toolbar)
-        val filterBar = JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+        val filterBar = JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 6, 2)).apply {
             add(search.apply { textEditor.columns = 16; textEditor.emptyText.text = "Filter by name…" })
             add(JBLabel("Show:"))
             add(locationFilter)
@@ -145,7 +145,7 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
             add(toolbar, BorderLayout.NORTH)
             add(filterBar, BorderLayout.SOUTH)
         }
-        val actions = JPanel(FlowLayout(FlowLayout.LEFT, 6, 4)).apply {
+        val actions = JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 6, 4)).apply {
             add(retrieveButton)
             add(deployButton)
             add(compareButton)
