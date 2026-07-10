@@ -26,6 +26,7 @@ import dev.skrety.sftoolkit.SfCli
 import dev.skrety.sftoolkit.filetypes.SoqlFileType
 import dev.skrety.sftoolkit.schema.OrgSchemaService
 import dev.skrety.sftoolkit.ui.OrgCombo
+import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import javax.swing.JButton
@@ -36,10 +37,10 @@ import javax.swing.table.DefaultTableModel
 
 class SoqlToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = SoqlPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel.component, "", false)
-        content.setDisposer(panel)
-        toolWindow.contentManager.addContent(content)
+        setupTabbedToolWindow(project, toolWindow, "Query") {
+            val panel = SoqlPanel(project)
+            panel.component to panel
+        }
     }
 }
 
@@ -52,7 +53,9 @@ class SoqlPanel(private val project: Project) : Disposable {
         false,
         false,
     )
-    private val orgCombo = OrgCombo(project)
+    // Local selection: each query tab targets its own org (IC2-style); the status-bar
+    // widget stays the project-wide switcher for retrieve/deploy.
+    private val orgCombo = OrgCombo(project, syncToProject = false)
     private val autoLimit = JBCheckBox("Auto LIMIT 200", true).apply {
         toolTipText = "Append LIMIT 200 when the query has no top-level LIMIT"
     }
@@ -117,7 +120,7 @@ class SoqlPanel(private val project: Project) : Disposable {
             project,
             SoqlCompletionProvider(
                 project,
-                { OrgService.get(project).current },
+                { orgCombo.selectedOrg ?: OrgService.get(project).current },
                 { msg ->
                     ApplicationManager.getApplication().invokeLater { statusLabel.text = msg }
                 },
@@ -136,7 +139,7 @@ class SoqlPanel(private val project: Project) : Disposable {
     }
 
     private fun syncSchema() {
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent() ?: return
         syncButton.isEnabled = false
         statusLabel.text = "Syncing schema from $org…"
         object : Task.Backgroundable(project, "Syncing org schema", true) {
@@ -162,7 +165,7 @@ class SoqlPanel(private val project: Project) : Disposable {
             runningIndicator?.cancel()
             return
         }
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent() ?: return
         val raw = queryField.text.trim()
         if (raw.isBlank()) return
         val query = applyAutoLimit(raw, autoLimit.isSelected)

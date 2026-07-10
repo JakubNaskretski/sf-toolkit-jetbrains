@@ -28,13 +28,13 @@
         <toolWindow id="SF Log" anchor="bottom" secondary="true"
                     icon="AllIcons.Toolwindows.ToolWindowMessages"
                     factoryClass="dev.skrety.sftoolkit.SfLogToolWindowFactory"/>
-        <toolWindow id="SOQL" anchor="bottom"
+        <toolWindow id="SOQL" anchor="bottom" canCloseContents="true"
                     icon="AllIcons.Nodes.DataTables"
                     factoryClass="dev.skrety.sftoolkit.soql.SoqlToolWindowFactory"/>
         <toolWindow id="SF Metadata" anchor="right"
                     icon="AllIcons.Toolwindows.ToolWindowStructure"
                     factoryClass="dev.skrety.sftoolkit.metadata.MetadataToolWindowFactory"/>
-        <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true"
+        <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true" canCloseContents="true"
                     icon="AllIcons.Actions.Execute"
                     factoryClass="dev.skrety.sftoolkit.apex.ApexToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>

@@ -12,11 +12,15 @@ import javax.swing.JButton
 import javax.swing.JPanel
 
 /**
- * Shared org switcher (combo + refresh button) used by the SOQL and Anonymous Apex
- * panels. Mirrors OrgService both ways; family lesson: one component, not N diverging
- * copies. Owner must dispose it (removes the OrgService listener).
+ * Shared org switcher (combo + refresh button). With [syncToProject] (SOQL panel) the
+ * combo mirrors OrgService both ways; without it (Anonymous Apex tabs) the selection
+ * stays local to the owning panel — each tab targets its own org. Owner must dispose
+ * it (removes the OrgService listener).
  */
-class OrgCombo(private val project: Project) : Disposable {
+class OrgCombo(
+    private val project: Project,
+    private val syncToProject: Boolean = true,
+) : Disposable {
 
     val combo = ComboBox<String>().apply {
         toolTipText = "Org to run against (also updates the project-wide selection)"
@@ -27,12 +31,16 @@ class OrgCombo(private val project: Project) : Disposable {
         isFocusable = false
     }
 
+    /** Current combo selection — the run target for local-mode owners. */
+    val selectedOrg: String?
+        get() = combo.selectedItem as? String
+
     private var updating = false
     private val listener = Runnable { sync() }
 
     init {
         combo.addActionListener {
-            if (!updating) {
+            if (!updating && syncToProject) {
                 val selected = combo.selectedItem as? String
                 if (!selected.isNullOrBlank() && selected != OrgService.get(project).current) {
                     OrgService.get(project).current = selected
@@ -60,11 +68,14 @@ class OrgCombo(private val project: Project) : Disposable {
         updating = true
         try {
             val orgService = OrgService.get(project)
+            val previous = combo.selectedItem as? String
             val items = orgService.orgs.map { it.display }.toMutableList()
             val current = orgService.current
             if (current != null && current !in items) items.add(0, current)
             combo.model = DefaultComboBoxModel(items.toTypedArray())
-            combo.selectedItem = current
+            combo.selectedItem =
+                if (syncToProject) current
+                else previous?.takeIf { it in items } ?: current // local tabs keep their pick
         } finally {
             updating = false
         }

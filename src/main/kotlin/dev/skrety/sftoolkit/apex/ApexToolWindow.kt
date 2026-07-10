@@ -16,12 +16,12 @@ import com.intellij.ui.EditorTextField
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.content.ContentFactory
 import com.intellij.util.ui.JBFont
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
 import dev.skrety.sftoolkit.filetypes.ApexFileType
 import dev.skrety.sftoolkit.ui.OrgCombo
+import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
 import java.awt.BorderLayout
 import java.awt.FlowLayout
 import java.nio.file.Files
@@ -32,10 +32,10 @@ import javax.swing.JTextArea
 
 class ApexToolWindowFactory : ToolWindowFactory, DumbAware {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = ApexPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel.component, "", false)
-        content.setDisposer(panel)
-        toolWindow.contentManager.addContent(content)
+        setupTabbedToolWindow(project, toolWindow, "Script") {
+            val panel = ApexPanel(project)
+            panel.component to panel
+        }
     }
 }
 
@@ -48,7 +48,8 @@ class ApexPanel(private val project: Project) : Disposable {
         false,
         false,
     )
-    private val orgCombo = OrgCombo(project)
+    // Local selection: each tab targets its own org (IC2-style), project org untouched.
+    private val orgCombo = OrgCombo(project, syncToProject = false)
     private val runButton = JButton("Run").apply {
         toolTipText = "Execute anonymous Apex (Ctrl/Cmd+Enter). Click again to cancel."
     }
@@ -107,7 +108,7 @@ class ApexPanel(private val project: Project) : Disposable {
             runningIndicator?.cancel()
             return
         }
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent() ?: return
         val code = codeField.text
         if (code.isBlank()) return
         inFlight = true
