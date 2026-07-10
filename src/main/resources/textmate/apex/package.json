@@ -1,0 +1,15 @@
+{
+  "name": "apex-sf-toolkit",
+  "version": "1.0.0",
+  "description": "Apex + SOQL TextMate grammars (from forcedotcom/apex-tmLanguage, BSD-3-Clause) packaged for SF Toolkit",
+  "contributes": {
+    "languages": [
+      { "id": "apex", "extensions": [".cls", ".trigger", ".apex"] },
+      { "id": "soql", "extensions": [".soql"] }
+    ],
+    "grammars": [
+      { "language": "apex", "scopeName": "source.apex", "path": "./apex.tmLanguage" },
+      { "language": "soql", "scopeName": "source.soql", "path": "./soql.tmLanguage" }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+# Build output
+build/
+.gradle/
+.intellijPlatform/
+.kotlin/
+
+# IDE workspace
+.idea/
+*.iml
+
+# Internal working notes — never committed (see global rules)
+*.local.md
+CLAUDE.md
+
+# Local data
+samples/
+.DS_Store

@@ -1,0 +1,5 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <textmate.bundleProvider implementation="dev.skrety.sftoolkit.textmate.ApexTextMateBundleProvider"/>
+    </extensions>
+</idea-plugin>

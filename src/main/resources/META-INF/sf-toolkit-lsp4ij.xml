@@ -1,0 +1,9 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server id="apexLsp" name="Apex Language Server"
+                factoryClass="dev.skrety.sftoolkit.lsp.ApexLspFactory"/>
+        <fileNamePatternMapping patterns="*.cls;*.trigger;*.apex"
+                                serverId="apexLsp"
+                                languageId="apex"/>
+    </extensions>
+</idea-plugin>

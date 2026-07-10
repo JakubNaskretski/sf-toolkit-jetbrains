@@ -1,0 +1,62 @@
+<idea-plugin>
+    <id>dev.skrety.sf-toolkit</id>
+    <name>SF Toolkit</name>
+    <vendor>Skrety</vendor>
+    <description><![CDATA[
+        Salesforce toolkit for JetBrains IDEs: org management, retrieve / deploy /
+        compare, SOQL queries, anonymous Apex and test runs — all driven through
+        the Salesforce CLI (<code>sf</code>), which owns authentication.
+        <br/><br/>
+        Apex/SOQL syntax highlighting uses the BSD-licensed TextMate grammars from
+        the forcedotcom/apex-tmLanguage project.
+    ]]></description>
+
+    <!-- Platform-only dependency: runs in IDEA CE/Ultimate, WebStorm, PyCharm, etc. -->
+    <depends>com.intellij.modules.platform</depends>
+    <!-- Apex/SOQL highlighting — active when the bundled TextMate plugin is enabled. -->
+    <depends optional="true" config-file="sf-toolkit-textmate.xml">org.jetbrains.plugins.textmate</depends>
+    <!-- Apex Language Server — active when the free LSP4IJ plugin is installed. -->
+    <depends optional="true" config-file="sf-toolkit-lsp4ij.xml">com.redhat.devtools.lsp4ij</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="SF Toolkit" displayType="BALLOON"/>
+        <applicationConfigurable parentId="tools" id="dev.skrety.sftoolkit.settings"
+                                 displayName="SF Toolkit"
+                                 instance="dev.skrety.sftoolkit.SfSettingsConfigurable"/>
+        <statusBarWidgetFactory id="SfToolkitOrg"
+                                implementation="dev.skrety.sftoolkit.OrgStatusBarWidgetFactory"/>
+        <toolWindow id="SF Log" anchor="bottom" secondary="true"
+                    icon="AllIcons.Toolwindows.ToolWindowMessages"
+                    factoryClass="dev.skrety.sftoolkit.SfLogToolWindowFactory"/>
+        <toolWindow id="SOQL" anchor="bottom"
+                    icon="AllIcons.Nodes.DataTables"
+                    factoryClass="dev.skrety.sftoolkit.soql.SoqlToolWindowFactory"/>
+        <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
+    </extensions>
+
+    <actions>
+        <group id="SfToolkit.Tools" text="SF Toolkit" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="SfToolkit.Login" class="dev.skrety.sftoolkit.LoginAction"
+                    text="Log In to Salesforce Org…"
+                    description="Authenticate a Salesforce org via sf org login web"/>
+        </group>
+
+        <group id="SfToolkit.Context" text="SF Toolkit" popup="true">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <action id="SfToolkit.Retrieve" class="dev.skrety.sftoolkit.RetrieveAction"
+                    text="Retrieve from Org"
+                    description="sf project retrieve start for the selected files"/>
+            <action id="SfToolkit.Deploy" class="dev.skrety.sftoolkit.DeployAction"
+                    text="Deploy to Org"
+                    description="sf project deploy start for the selected files"/>
+            <action id="SfToolkit.Validate" class="dev.skrety.sftoolkit.ValidateAction"
+                    text="Validate Deploy (Dry Run)"
+                    description="sf project deploy start --dry-run for the selected files"/>
+            <action id="SfToolkit.Compare" class="dev.skrety.sftoolkit.CompareWithOrgAction"
+                    text="Compare with Org"
+                    description="Diff the local file against the component body in the org"/>
+        </group>
+    </actions>
+</idea-plugin>
