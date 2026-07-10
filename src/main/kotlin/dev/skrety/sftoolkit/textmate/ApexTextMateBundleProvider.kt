@@ -19,27 +19,63 @@ class ApexTextMateBundleProvider : TextMateBundleProvider {
         return listOf(TextMateBundleProvider.PluginBundle("Apex (SF Toolkit)", dir))
     }
 
-    private fun extractBundle(): Path? {
-        try {
-            val target = Path.of(PathManager.getSystemPath(), "sf-toolkit", "textmate-apex")
-            Files.createDirectories(target)
-            for (name in FILES) {
-                val res = javaClass.getResourceAsStream("/textmate/apex/$name")
-                if (res == null) {
-                    LOG.warn("Missing bundled resource textmate/apex/$name")
-                    return null
-                }
-                res.use { Files.copy(it, target.resolve(name), StandardCopyOption.REPLACE_EXISTING) }
+    private fun extractBundle(): Path? = extractApexBundle()
+
+    companion object {
+        private val FILES get() = APEX_BUNDLE_FILES
+    }
+}
+
+private val LOG = Logger.getInstance(ApexTextMateBundleProvider::class.java)
+internal val APEX_BUNDLE_FILES = listOf("package.json", "apex.tmLanguage", "soql.tmLanguage", "LICENSE.txt")
+
+/** Extracts the bundle resources to a stable path; shared by the EP provider and the self-heal. */
+internal fun extractApexBundle(): Path? {
+    try {
+        val target = Path.of(PathManager.getSystemPath(), "sf-toolkit", "textmate-apex")
+        Files.createDirectories(target)
+        for (name in APEX_BUNDLE_FILES) {
+            val res = ApexTextMateBundleProvider::class.java.getResourceAsStream("/textmate/apex/$name")
+            if (res == null) {
+                LOG.warn("Missing bundled resource textmate/apex/$name")
+                return null
             }
-            return target
-        } catch (e: Exception) {
-            LOG.warn("Failed to extract Apex TextMate bundle", e)
-            return null
+            res.use { Files.copy(it, target.resolve(name), StandardCopyOption.REPLACE_EXISTING) }
+        }
+        return target
+    } catch (e: Exception) {
+        LOG.warn("Failed to extract Apex TextMate bundle", e)
+        return null
+    }
+}
+
+/**
+ * Fallback for installs where the bundleProvider EP path doesn't deliver (field report:
+ * plain-text .cls): registers the extracted bundle as a TextMate USER bundle and reloads.
+ * Idempotent; invoked reflectively from SfStartup (this class needs the textmate plugin).
+ */
+object TextMateSelfHeal {
+    @JvmStatic
+    fun ensureGrammar(): Boolean {
+        if (resolves()) return true
+        val dir = extractApexBundle() ?: return false
+        return try {
+            val settings =
+                org.jetbrains.plugins.textmate.configuration.TextMateUserBundlesSettings.getInstance()
+            val already = settings?.bundles?.keys?.any { it == dir.toString() } == true
+            if (!already) settings?.addBundle(dir.toString(), "Apex (SF Toolkit)")
+            org.jetbrains.plugins.textmate.TextMateService.getInstance().reloadEnabledBundles()
+            resolves()
+        } catch (t: Throwable) {
+            LOG.warn("TextMate self-heal failed", t)
+            false
         }
     }
 
-    companion object {
-        private val LOG = Logger.getInstance(ApexTextMateBundleProvider::class.java)
-        private val FILES = listOf("package.json", "apex.tmLanguage", "soql.tmLanguage", "LICENSE.txt")
+    private fun resolves(): Boolean = try {
+        org.jetbrains.plugins.textmate.TextMateService.getInstance()
+            ?.getLanguageDescriptorByFileName("Probe.cls") != null
+    } catch (_: Throwable) {
+        false
     }
 }

@@ -71,10 +71,6 @@ class SoqlPanel(private val project: Project) : Disposable {
         toolTipText = "Save the fetched rows as CSV (formula-injection-safe quoting)"
         isEnabled = false
     }
-    private val syncButton = JButton("Sync Schema").apply {
-        toolTipText = "Cache the org's object names — completion then pops up as you type " +
-            "(or Ctrl+Space). Field completion learns each object the first time you query it."
-    }
     private val statusLabel = JBLabel(" ").apply { setCopyable(true) }
     private val tableModel = object : DefaultTableModel() {
         override fun isCellEditable(row: Int, column: Int): Boolean = false
@@ -109,7 +105,6 @@ class SoqlPanel(private val project: Project) : Disposable {
         orgCombo.addTo(toolbar)
         toolbar.add(historyButton)
         toolbar.add(autoLimit)
-        toolbar.add(syncButton)
         toolbar.add(exportButton)
         val top = JPanel(BorderLayout()).apply {
             add(toolbar, BorderLayout.NORTH)
@@ -122,9 +117,10 @@ class SoqlPanel(private val project: Project) : Disposable {
         TableSpeedSearch.installOn(table)
 
         runButton.addActionListener { toggleRun() }
-        syncButton.addActionListener { syncSchema() }
         exportButton.addActionListener { exportCsv() }
         historyButton.addActionListener { showHistory() }
+        // IC-style: the schema cache builds itself — no button to know about.
+        autoSyncSchemaIfNeeded()
         table.componentPopupMenu = javax.swing.JPopupMenu().apply {
             add(javax.swing.JMenuItem("Open Record in Org").apply {
                 addActionListener { openSelectedRecord() }
@@ -144,7 +140,10 @@ class SoqlPanel(private val project: Project) : Disposable {
                 project,
                 { orgCombo.selectedOrg ?: OrgService.get(project).current },
                 { msg ->
-                    ApplicationManager.getApplication().invokeLater { statusLabel.text = msg }
+                    ApplicationManager.getApplication().invokeLater {
+                        statusLabel.text = msg
+                        autoSyncSchemaIfNeeded()
+                    }
                 },
             ),
             true,
@@ -161,21 +160,21 @@ class SoqlPanel(private val project: Project) : Disposable {
         orgCombo.dispose()
     }
 
-    private fun syncSchema() {
-        val org = orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent() ?: return
-        syncButton.isEnabled = false
-        statusLabel.text = "Syncing schema from $org…"
-        object : Task.Backgroundable(project, "Syncing org schema", true) {
+    /** Quiet one-shot per org: completion works without the user knowing about caches. */
+    private fun autoSyncSchemaIfNeeded() {
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).current ?: return
+        val schema = OrgSchemaService.get(project)
+        if (schema.objectNames(org) != null || !syncingOrgs.add(org)) return
+        object : Task.Backgroundable(project, "Caching org schema for completion", true) {
             private var count: Int? = null
 
             override fun run(indicator: ProgressIndicator) {
-                count = OrgSchemaService.get(project).syncObjects(org, indicator)
+                count = schema.syncObjects(org, indicator)
             }
 
             override fun onFinished() {
-                syncButton.isEnabled = true
-                statusLabel.text = count?.let { "Schema synced: $it objects — $org" }
-                    ?: "Schema sync failed — $org (see SF Log)"
+                syncingOrgs.remove(org)
+                count?.let { statusLabel.text = "Schema cached: $it objects — completion ready" }
             }
         }.queue()
     }
@@ -329,5 +328,8 @@ class SoqlPanel(private val project: Project) : Disposable {
 
     companion object {
         const val MAX_ROWS = 10_000
+
+        // single-flight guard for the quiet auto-sync, shared across tabs
+        private val syncingOrgs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     }
 }

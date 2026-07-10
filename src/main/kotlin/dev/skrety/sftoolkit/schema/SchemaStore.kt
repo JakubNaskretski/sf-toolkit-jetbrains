@@ -63,6 +63,21 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
         Files.writeString(describeFile(schema.name), gson.toJson(schema))
     }
 
+    /** Metadata-browser listing cache: survive IDE restarts (field request). */
+    fun readMetadataRows(): List<dev.skrety.sftoolkit.metadata.MetaRow>? {
+        val file = root.resolve("metadata-rows.json")
+        if (!isFresh(file)) return null
+        return memoized(file) { text ->
+            gson.fromJson(text, Array<dev.skrety.sftoolkit.metadata.MetaRow>::class.java)
+                ?.toList()?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    fun writeMetadataRows(rows: List<dev.skrety.sftoolkit.metadata.MetaRow>) {
+        Files.createDirectories(root)
+        Files.writeString(root.resolve("metadata-rows.json"), gson.toJson(rows))
+    }
+
     /** Every fresh cached describe (faux-class generation input). */
     fun allCachedDescribes(): List<ObjectSchema> {
         val dir = root.resolve("describes")

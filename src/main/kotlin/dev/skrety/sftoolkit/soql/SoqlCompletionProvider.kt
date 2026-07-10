@@ -33,7 +33,7 @@ class SoqlCompletionProvider(
         val schema = OrgSchemaService.get(project)
         val objectNames = schema.objectNames(org)
         if (objectNames == null) {
-            hint("No schema cache for $org — click Sync Schema for completion")
+            hint("Caching org schema for completion — retry in a few seconds")
             return emptyList()
         }
         return soqlSuggestions(ctx, objectNames, { schema.describe(org, it) })

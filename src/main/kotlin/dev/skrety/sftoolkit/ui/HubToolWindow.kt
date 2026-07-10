@@ -49,7 +49,10 @@ class HubPanel(private val project: Project) : Disposable {
             add(actionButton("Log In to New Org…", AllIcons.General.User) { LoginAction.run(project) })
 
             add(TitledSeparator("Windows"))
-            add(actionButton("Org Metadata Browser", AllIcons.Toolwindows.ToolWindowStructure) { open("SF Metadata") })
+            add(actionButton(
+                "Org Metadata Browser",
+                com.intellij.openapi.util.IconLoader.getIcon("/icons/sfMetadata.svg", HubPanel::class.java),
+            ) { open("SF Metadata") })
             add(actionButton("SOQL Queries", AllIcons.Nodes.DataTables) { open("SOQL") })
             add(actionButton("Anonymous Apex", AllIcons.Actions.Execute) { open("Anonymous Apex") })
             add(actionButton("Apex Debug Logs", AllIcons.Debugger.Console) { open("Apex Logs") })

@@ -146,10 +146,47 @@ class SfStartup : ProjectActivity {
     /** One-line health report per subsystem into SF Log — field debugging. */
     private fun logIntegrationHealth(project: Project) {
         val log = SfLog.get(project)
-        if (SfHealth.grammarActive()) log.ok("Apex TextMate grammar: ACTIVE (.cls highlighting works)")
-        else log.warn("Apex TextMate grammar: NOT RESOLVED — .cls files will render plain")
+        var grammar = SfHealth.grammarActive()
+        if (!grammar) {
+            // Field report: EP-provided bundle didn't deliver on a real install —
+            // register as a TextMate USER bundle and reload (reflective: optional plugin).
+            grammar = try {
+                Class.forName("dev.skrety.sftoolkit.textmate.TextMateSelfHeal")
+                    .getMethod("ensureGrammar").invoke(null) as? Boolean ?: false
+            } catch (_: Throwable) {
+                false
+            }
+            if (grammar) log.ok("Apex TextMate grammar: repaired via user-bundle registration")
+        }
+        if (grammar) log.ok("Apex TextMate grammar: ACTIVE (.cls highlighting works)")
+        else log.warn("Apex TextMate grammar: NOT RESOLVED — .cls files will render plain (is the TextMate Bundles plugin enabled?)")
         val scopes = SfHealth.scopesCount()
         if (scopes == 4) log.ok("Search scopes registered: 4/4")
         else log.warn("Search scopes registered: $scopes/4")
+        maybeAdvertiseLsp4ij(project)
+    }
+
+    /** No LSP4IJ = zero Apex completion, silently. Say it loudly, once per project. */
+    private fun maybeAdvertiseLsp4ij(project: Project) {
+        val installed = com.intellij.ide.plugins.PluginManagerCore.getPlugin(
+            com.intellij.openapi.extensions.PluginId.getId("com.redhat.devtools.lsp4ij"),
+        ) != null
+        if (installed) return
+        val props = com.intellij.ide.util.PropertiesComponent.getInstance(project)
+        if (props.getBoolean("sfToolkit.lsp4ij.advertised", false)) return
+        props.setValue("sfToolkit.lsp4ij.advertised", true)
+        NotificationGroupManager.getInstance().getNotificationGroup("SF Toolkit")
+            .createNotification(
+                "Apex code completion is OFF",
+                "SF Toolkit uses the Apex Language Server through the free LSP4IJ plugin, " +
+                    "which is not installed. Install it from the Marketplace, restart, and " +
+                    ".cls files get completion, go-to-definition and errors.",
+                NotificationType.WARNING,
+            )
+            .addAction(com.intellij.notification.NotificationAction.createSimple("Open Plugin Manager") {
+                com.intellij.openapi.options.ShowSettingsUtil.getInstance()
+                    .showSettingsDialog(project, "Plugins")
+            })
+            .notify(project)
     }
 }
