@@ -150,9 +150,11 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
             add(deployButton)
             add(compareButton)
         }
+        // Full-width rows: a wrapping panel inside BorderLayout.WEST never re-lays out
+        // on resize (field bug: buttons vanish when the panel grows back).
         val south = JPanel(BorderLayout()).apply {
-            add(actions, BorderLayout.WEST)
-            add(statusLabel, BorderLayout.CENTER)
+            add(actions, BorderLayout.NORTH)
+            add(statusLabel, BorderLayout.SOUTH)
         }
 
         listButton.addActionListener { listMetadata() }

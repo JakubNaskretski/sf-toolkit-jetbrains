@@ -58,11 +58,18 @@ class ApexLspConnectionProvider(project: Project) : ProcessStreamConnectionProvi
     }
 }
 
+/** Where "Download Apex Language Server" installs the jar — no VS Code required. */
+fun managedApexLspJar(): Path = Path.of(
+    com.intellij.openapi.application.PathManager.getSystemPath(),
+    "sf-toolkit", "apex-jorje-lsp.jar",
+)
+
 fun findApexLspJar(): Path? {
     SfSettings.get().state.apexLspJarPath?.takeIf { it.isNotBlank() }?.let {
         val p = Path.of(it)
         if (Files.isRegularFile(p)) return p
     }
+    managedApexLspJar().takeIf { Files.isRegularFile(it) }?.let { return it }
     val extensions = Path.of(System.getProperty("user.home"), ".vscode", "extensions")
     if (!Files.isDirectory(extensions)) return null
     return Files.list(extensions).use { stream ->

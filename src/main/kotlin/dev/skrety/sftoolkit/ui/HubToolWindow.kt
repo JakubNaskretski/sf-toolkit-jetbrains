@@ -62,6 +62,9 @@ class HubPanel(private val project: Project) : Disposable {
             add(actionButton("Generate Apex sObject Definitions", AllIcons.Actions.Download) {
                 execute("SfToolkit.GenerateSObjects")
             })
+            add(actionButton("Download Apex Language Server", AllIcons.Actions.Install) {
+                execute("SfToolkit.DownloadApexLs")
+            })
             add(actionButton("Run Health Check", AllIcons.General.InspectionsEye) {
                 execute("SfToolkit.HealthCheck")
             })

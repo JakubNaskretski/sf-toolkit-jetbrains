@@ -67,6 +67,9 @@
             <action id="SfToolkit.HealthCheck" class="dev.skrety.sftoolkit.HealthCheckAction"
                     text="Run Health Check"
                     description="Report the status of every SF Toolkit integration"/>
+            <action id="SfToolkit.DownloadApexLs" class="dev.skrety.sftoolkit.lsp.DownloadApexLsAction"
+                    text="Download Apex Language Server"
+                    description="Install the Apex Language Server jar without VS Code"/>
             <action id="SfToolkit.GenerateSObjects"
                     class="dev.skrety.sftoolkit.schema.GenerateSObjectDefinitionsAction"
                     text="Generate Apex sObject Definitions"
