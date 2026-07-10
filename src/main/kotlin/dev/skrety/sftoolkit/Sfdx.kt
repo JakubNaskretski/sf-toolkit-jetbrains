@@ -28,6 +28,9 @@ private val TOOLING_BY_DIR = mapOf(
 // Trust boundary: component name is spliced into a SOQL string — allow identifier chars only.
 private val NAME_RE = Regex("^[A-Za-z][A-Za-z0-9_]*$")
 
+/** Identifier guard for anything spliced into SOQL or argv (objects, classes). */
+fun isValidApiName(name: String): Boolean = NAME_RE.matches(name)
+
 data class ToolingRef(val type: ToolingType, val name: String)
 
 fun toolingRefFor(fileName: String, parentDirName: String?): ToolingRef? {

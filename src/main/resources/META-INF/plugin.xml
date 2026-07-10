@@ -34,6 +34,9 @@
         <toolWindow id="SF Metadata" anchor="right"
                     icon="AllIcons.Toolwindows.ToolWindowStructure"
                     factoryClass="dev.skrety.sftoolkit.metadata.MetadataToolWindowFactory"/>
+        <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true"
+                    icon="AllIcons.Actions.Execute"
+                    factoryClass="dev.skrety.sftoolkit.apex.ApexToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
     </extensions>
 
@@ -60,6 +63,9 @@
             <action id="SfToolkit.Compare" class="dev.skrety.sftoolkit.CompareWithOrgAction"
                     text="Compare with Org"
                     description="Diff the local file against the component body in the org"/>
+            <action id="SfToolkit.RunTests" class="dev.skrety.sftoolkit.apex.RunApexTestsAction"
+                    text="Run Apex Tests in Class"
+                    description="sf apex run test --synchronous for this class"/>
         </group>
     </actions>
 </idea-plugin>

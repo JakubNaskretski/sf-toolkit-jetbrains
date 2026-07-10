@@ -33,7 +33,13 @@ Requirements on the machine running the IDE:
 - **Apex Language Server** integration through LSP4IJ: completion,
   go-to-definition, hover, references, diagnostics
 - **SOQL tool window** — cancellable queries, auto-LIMIT toggle, flattened
-  result table with sorting and speed search
+  result table with sorting and speed search, and **schema-aware completion**
+  (Ctrl+Space): sync the org's object list once, field completion learns each
+  object automatically the first time you query it (offline cache, per org)
+- **Anonymous Apex tool window** — run snippets against the org; compile errors
+  with line/column, runtime exceptions with stack trace, full debug log
+- **Apex test runner** — right-click a test class → Run Apex Tests in Class;
+  pass/fail summary with per-failure messages and stack traces in the SF Log
 
 Every CLI call is logged (queries redacted) to the **SF Log** tool window.
 

@@ -1,6 +1,5 @@
 package dev.skrety.sftoolkit.soql
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
@@ -11,7 +10,6 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.LanguageTextField
@@ -22,12 +20,13 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.table.JBTable
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
-import dev.skrety.sftoolkit.refreshOrgsInBackground
+import dev.skrety.sftoolkit.schema.OrgSchemaService
+import dev.skrety.sftoolkit.ui.OrgCombo
 import java.awt.BorderLayout
 import java.awt.FlowLayout
-import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -47,19 +46,16 @@ class SoqlPanel(private val project: Project) : Disposable {
 
     private val queryField =
         LanguageTextField(PlainTextLanguage.INSTANCE, project, "SELECT Id, Name FROM Account", false)
-    private val orgCombo = ComboBox<String>().apply {
-        toolTipText = "Org this query runs against (also updates the project-wide selection)"
-        setMinimumAndPreferredWidth(220)
-    }
-    private val refreshOrgsButton = JButton(AllIcons.Actions.Refresh).apply {
-        toolTipText = "Refresh org list"
-        isFocusable = false
-    }
+    private val orgCombo = OrgCombo(project)
     private val autoLimit = JBCheckBox("Auto LIMIT 200", true).apply {
         toolTipText = "Append LIMIT 200 when the query has no top-level LIMIT"
     }
     private val runButton = JButton("Run").apply {
         toolTipText = "Run query (Ctrl/Cmd+Enter). Click again to cancel."
+    }
+    private val syncButton = JButton("Sync Schema").apply {
+        toolTipText = "Cache the org's object names for completion (Ctrl+Space). " +
+            "Field completion learns each object the first time you query it."
     }
     private val statusLabel = JBLabel(" ").apply { setCopyable(true) }
     private val tableModel = object : DefaultTableModel() {
@@ -70,9 +66,6 @@ class SoqlPanel(private val project: Project) : Disposable {
         autoCreateRowSorter = true
         emptyText.text = "No results — run a query (Ctrl/Cmd+Enter)"
     }
-
-    private val orgListener = Runnable { refreshOrgCombo() }
-    private var updatingCombo = false
 
     @Volatile
     private var runningIndicator: ProgressIndicator? = null
@@ -90,11 +83,10 @@ class SoqlPanel(private val project: Project) : Disposable {
     private fun build(): JComponent {
         val toolbar = JPanel(FlowLayout(FlowLayout.LEFT, 8, 4)).apply {
             add(runButton)
-            add(JBLabel("Org:"))
-            add(orgCombo)
-            add(refreshOrgsButton)
-            add(autoLimit)
         }
+        orgCombo.addTo(toolbar)
+        toolbar.add(autoLimit)
+        toolbar.add(syncButton)
         val top = JPanel(BorderLayout()).apply {
             add(toolbar, BorderLayout.NORTH)
             add(queryField, BorderLayout.CENTER)
@@ -106,25 +98,17 @@ class SoqlPanel(private val project: Project) : Disposable {
         TableSpeedSearch.installOn(table)
 
         runButton.addActionListener { toggleRun() }
-        refreshOrgsButton.addActionListener { refreshOrgsInBackground(project) }
-        orgCombo.addActionListener {
-            if (!updatingCombo) {
-                val selected = orgCombo.selectedItem as? String
-                if (!selected.isNullOrBlank() && selected != OrgService.get(project).current) {
-                    OrgService.get(project).current = selected
-                }
-            }
-        }
+        syncButton.addActionListener { syncSchema() }
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) {
                 if (!inFlight) toggleRun()
             }
         }.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER", "meta ENTER"), queryField)
-
-        val orgService = OrgService.get(project)
-        orgService.addChangeListener(orgListener)
-        refreshOrgCombo()
-        if (orgService.orgs.isEmpty()) refreshOrgsInBackground(project, quiet = true)
+        object : DumbAwareAction() {
+            override fun actionPerformed(e: AnActionEvent) {
+                showCompletion()
+            }
+        }.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl SPACE"), queryField)
 
         return OnePixelSplitter(true, 0.3f).apply {
             firstComponent = top
@@ -133,22 +117,63 @@ class SoqlPanel(private val project: Project) : Disposable {
     }
 
     override fun dispose() {
-        OrgService.get(project).removeChangeListener(orgListener)
+        orgCombo.dispose()
     }
 
-    /** Mirrors OrgService into the combo; the combo is the panel's org switcher. */
-    private fun refreshOrgCombo() {
-        updatingCombo = true
-        try {
-            val orgService = OrgService.get(project)
-            val items = orgService.orgs.map { it.display }.toMutableList()
-            val current = orgService.current
-            if (current != null && current !in items) items.add(0, current)
-            orgCombo.model = DefaultComboBoxModel(items.toTypedArray())
-            orgCombo.selectedItem = current
-        } finally {
-            updatingCombo = false
+    private fun syncSchema() {
+        val org = OrgService.get(project).requireCurrent() ?: return
+        syncButton.isEnabled = false
+        statusLabel.text = "Syncing schema from $org…"
+        object : Task.Backgroundable(project, "Syncing org schema", true) {
+            private var count: Int? = null
+
+            override fun run(indicator: ProgressIndicator) {
+                count = OrgSchemaService.get(project).syncObjects(org, indicator)
+            }
+
+            override fun onFinished() {
+                syncButton.isEnabled = true
+                statusLabel.text = count?.let { "Schema synced: $it objects — $org" }
+                    ?: "Schema sync failed — $org (see SF Log)"
+            }
+        }.queue()
+    }
+
+    /** Ctrl+Space: cache-only completion — never calls the CLI from the typing path. */
+    private fun showCompletion() {
+        val editor = queryField.editor
+        val caret = editor?.caretModel?.offset ?: queryField.text.length
+        val ctx = soqlContextAt(queryField.text, caret)
+        val org = OrgService.get(project).current ?: run {
+            statusLabel.text = "Pick an org first"
+            return
         }
+        val schema = OrgSchemaService.get(project)
+        val objectNames = schema.objectNames(org)
+        val suggestions = soqlSuggestions(ctx, objectNames, { schema.describe(org, it) })
+        if (suggestions.isEmpty()) {
+            statusLabel.text = when {
+                objectNames == null -> "No schema cache for $org — click Sync Schema"
+                ctx.clause != SoqlClause.FROM && ctx.objectName != null &&
+                    schema.describe(org, ctx.objectName) == null ->
+                    "No field cache for ${ctx.objectName} yet — run one query on it (auto-describes)"
+                else -> "No suggestions"
+            }
+            return
+        }
+        JBPopupFactory.getInstance()
+            .createPopupChooserBuilder(suggestions)
+            .setItemChosenCallback { chosen ->
+                ApplicationManager.getApplication().runWriteAction {
+                    queryField.document.replaceString(ctx.replaceStart, caret, chosen)
+                }
+                editor?.caretModel?.moveToOffset(ctx.replaceStart + chosen.length)
+            }
+            .createPopup()
+            .let { popup ->
+                if (editor != null) popup.showInBestPositionFor(editor)
+                else popup.showUnderneathOf(queryField)
+            }
     }
 
     /** Run button doubles as Cancel while a query is in flight (family lesson: always cancellable). */
@@ -199,6 +224,14 @@ class SoqlPanel(private val project: Project) : Disposable {
                             autoSizeColumns(cols, rows)
                             statusLabel.text = "$total row(s) — $org" +
                                 if (records.size > MAX_ROWS) " (showing first $MAX_ROWS)" else ""
+                        }
+                        // Cache the FROM object's describe so field completion works next
+                        // time. Own pooled thread — must not extend the query's in-flight
+                        // state past the visible results (review finding).
+                        soqlContextAt(query, query.length).objectName?.let { obj ->
+                            ApplicationManager.getApplication().executeOnPooledThread {
+                                OrgSchemaService.get(project).ensureDescribe(org, obj, null)
+                            }
                         }
                     }
                 }
