@@ -140,5 +140,16 @@ class SfStartup : ProjectActivity {
     override suspend fun execute(project: Project) {
         // Unsolicited: never nag non-Salesforce projects / machines without the CLI.
         refreshOrgsInBackground(project, quiet = true)
+        logIntegrationHealth(project)
+    }
+
+    /** One-line health report per subsystem into SF Log — field debugging. */
+    private fun logIntegrationHealth(project: Project) {
+        val log = SfLog.get(project)
+        if (SfHealth.grammarActive()) log.ok("Apex TextMate grammar: ACTIVE (.cls highlighting works)")
+        else log.warn("Apex TextMate grammar: NOT RESOLVED — .cls files will render plain")
+        val scopes = SfHealth.scopesCount()
+        if (scopes == 4) log.ok("Search scopes registered: 4/4")
+        else log.warn("Search scopes registered: $scopes/4")
     }
 }

@@ -18,6 +18,11 @@
     <!-- Apex Language Server — active when the free LSP4IJ plugin is installed. -->
     <depends optional="true" config-file="sf-toolkit-lsp4ij.xml">com.redhat.devtools.lsp4ij</depends>
 
+    <applicationListeners>
+        <listener class="dev.skrety.sftoolkit.SfAppHealth"
+                  topic="com.intellij.ide.AppLifecycleListener"/>
+    </applicationListeners>
+
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="SF Toolkit" displayType="BALLOON"/>
         <applicationConfigurable parentId="tools" id="dev.skrety.sftoolkit.settings"
@@ -53,6 +58,9 @@
             <action id="SfToolkit.Login" class="dev.skrety.sftoolkit.LoginAction"
                     text="Log In to Salesforce Org…"
                     description="Authenticate a Salesforce org via sf org login web"/>
+            <action id="SfToolkit.HealthCheck" class="dev.skrety.sftoolkit.HealthCheckAction"
+                    text="Run Health Check"
+                    description="Report the status of every SF Toolkit integration"/>
             <action id="SfToolkit.GenerateSObjects"
                     class="dev.skrety.sftoolkit.schema.GenerateSObjectDefinitionsAction"
                     text="Generate Apex sObject Definitions"

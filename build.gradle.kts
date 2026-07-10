@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.skrety"
-version = "0.10.0"
+version = "0.11.0"
 
 repositories {
     mavenCentral()
@@ -34,6 +34,14 @@ dependencies {
 
 kotlin {
     jvmToolchain(21)
+}
+
+tasks.runIde {
+    // Sandbox diagnostics: open a project without the trust dialog blocking headless boots.
+    jvmArgs("-Didea.trust.all.projects=true")
+    // ./gradlew runIde -PopenProject=/path/to/project opens that project on boot.
+    val openProject = providers.gradleProperty("openProject")
+    argumentProviders.add(CommandLineArgumentProvider { listOfNotNull(openProject.orNull) })
 }
 
 intellijPlatform {
