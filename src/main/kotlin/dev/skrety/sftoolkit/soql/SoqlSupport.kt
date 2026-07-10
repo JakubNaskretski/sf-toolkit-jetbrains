@@ -79,3 +79,26 @@ fun columnsOf(rows: List<Map<String, String>>): List<String> {
     rows.forEach { cols += it.keys }
     return cols.toList()
 }
+
+/**
+ * CSV with RFC-style quoting + spreadsheet formula-injection neutralized
+ * (family rule: leading = + - @ get a ' prefix).
+ */
+fun toCsv(cols: List<String>, rows: List<Map<String, String>>): String {
+    fun cell(value: String): String {
+        val guarded = if (value.firstOrNull() in FORMULA_CHARS) "'$value" else value
+        return "\"" + guarded.replace("\"", "\"\"") + "\""
+    }
+    return buildString {
+        appendLine(cols.joinToString(",") { cell(it) })
+        for (row in rows) {
+            appendLine(cols.joinToString(",") { cell(row[it] ?: "") })
+        }
+    }
+}
+
+private val FORMULA_CHARS = setOf('=', '+', '-', '@')
+
+/** 15/18-char Salesforce record id (family-validated pattern). */
+fun looksLikeRecordId(value: String): Boolean =
+    Regex("^[a-zA-Z0-9]{15}([a-zA-Z0-9]{3})?$").matches(value)

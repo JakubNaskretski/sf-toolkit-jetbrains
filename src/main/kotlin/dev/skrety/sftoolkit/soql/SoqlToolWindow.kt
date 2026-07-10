@@ -62,6 +62,10 @@ class SoqlPanel(private val project: Project) : Disposable {
     private val runButton = JButton("Run").apply {
         toolTipText = "Run query (Ctrl/Cmd+Enter). Click again to cancel."
     }
+    private val exportButton = JButton("Export CSV").apply {
+        toolTipText = "Save the fetched rows as CSV (formula-injection-safe quoting)"
+        isEnabled = false
+    }
     private val syncButton = JButton("Sync Schema").apply {
         toolTipText = "Cache the org's object names — completion then pops up as you type " +
             "(or Ctrl+Space). Field completion learns each object the first time you query it."
@@ -75,6 +79,10 @@ class SoqlPanel(private val project: Project) : Disposable {
         autoCreateRowSorter = true
         emptyText.text = "No results — run a query (Ctrl/Cmd+Enter)"
     }
+
+    // Last successful result, retained for CSV export and open-record.
+    private var lastCols: List<String> = emptyList()
+    private var lastRows: List<Map<String, String>> = emptyList()
 
     @Volatile
     private var runningIndicator: ProgressIndicator? = null
@@ -96,6 +104,7 @@ class SoqlPanel(private val project: Project) : Disposable {
         orgCombo.addTo(toolbar)
         toolbar.add(autoLimit)
         toolbar.add(syncButton)
+        toolbar.add(exportButton)
         val top = JPanel(BorderLayout()).apply {
             add(toolbar, BorderLayout.NORTH)
             add(queryField, BorderLayout.CENTER)
@@ -108,6 +117,12 @@ class SoqlPanel(private val project: Project) : Disposable {
 
         runButton.addActionListener { toggleRun() }
         syncButton.addActionListener { syncSchema() }
+        exportButton.addActionListener { exportCsv() }
+        table.componentPopupMenu = javax.swing.JPopupMenu().apply {
+            add(javax.swing.JMenuItem("Open Record in Org").apply {
+                addActionListener { openSelectedRecord() }
+            })
+        }
         object : DumbAwareAction() {
             override fun actionPerformed(e: AnActionEvent) {
                 if (!inFlight) toggleRun()
@@ -204,6 +219,9 @@ class SoqlPanel(private val project: Project) : Disposable {
                         app.invokeLater {
                             tableModel.setDataVector(data, cols.map { it as Any }.toTypedArray())
                             autoSizeColumns(cols, rows)
+                            lastCols = cols
+                            lastRows = rows
+                            exportButton.isEnabled = rows.isNotEmpty()
                             statusLabel.text = "$total row(s) — $org" +
                                 if (records.size > MAX_ROWS) " (showing first $MAX_ROWS)" else ""
                         }
@@ -223,6 +241,50 @@ class SoqlPanel(private val project: Project) : Disposable {
                 runningIndicator = null
                 inFlight = false
                 runButton.text = "Run"
+            }
+        }.queue()
+    }
+
+    private fun exportCsv() {
+        if (lastRows.isEmpty()) return
+        val descriptor = com.intellij.openapi.fileChooser.FileSaverDescriptor("Export Query Results", "", "csv")
+        val wrapper = com.intellij.openapi.fileChooser.FileChooserFactory.getInstance()
+            .createSaveFileDialog(descriptor, project)
+            .save(null as com.intellij.openapi.vfs.VirtualFile?, "query-results.csv") ?: return
+        val csv = toCsv(lastCols, lastRows)
+        ApplicationManager.getApplication().executeOnPooledThread {
+            try {
+                wrapper.file.writeText(csv)
+                ApplicationManager.getApplication().invokeLater {
+                    statusLabel.text = "Exported ${lastRows.size} row(s) to ${wrapper.file.name}"
+                }
+            } catch (e: Exception) {
+                ApplicationManager.getApplication().invokeLater {
+                    statusLabel.text = "Export failed: ${e.message}"
+                }
+            }
+        }
+    }
+
+    /** Opens the selected row's record via `sf org open` (frontdoor URL, family pattern). */
+    private fun openSelectedRecord() {
+        val viewRow = table.selectedRow.takeIf { it >= 0 } ?: return
+        val modelRow = table.convertRowIndexToModel(viewRow)
+        val row = lastRows.getOrNull(modelRow) ?: return
+        // Only the exact Id column — any Id-shaped fallback happily opens OwnerId/
+        // CreatedById instead of the record (review finding).
+        val id = row["Id"]?.takeIf { looksLikeRecordId(it) }
+        if (id == null) {
+            statusLabel.text = "Include Id in the SELECT to open records from results"
+            return
+        }
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent() ?: return
+        object : Task.Backgroundable(project, "Opening record in $org…", true) {
+            override fun run(indicator: ProgressIndicator) {
+                SfCli.get(project).execute(
+                    listOf("org", "open", "--path", "/$id", "-o", org),
+                    indicator,
+                )
             }
         }.queue()
     }

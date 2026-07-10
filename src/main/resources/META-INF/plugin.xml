@@ -53,6 +53,10 @@
             <action id="SfToolkit.Login" class="dev.skrety.sftoolkit.LoginAction"
                     text="Log In to Salesforce Org…"
                     description="Authenticate a Salesforce org via sf org login web"/>
+            <action id="SfToolkit.GenerateSObjects"
+                    class="dev.skrety.sftoolkit.schema.GenerateSObjectDefinitionsAction"
+                    text="Generate Apex sObject Definitions"
+                    description="Write faux classes to .sfdx/tools/sobjects so Apex completion knows org fields"/>
         </group>
 
         <group id="SfToolkit.Context" text="SF Toolkit" popup="true">
@@ -73,6 +77,9 @@
             <action id="SfToolkit.RunTests" class="dev.skrety.sftoolkit.apex.RunApexTestsAction"
                     text="Run Apex Tests in Class"
                     description="sf apex run test --synchronous for this class"/>
+            <action id="SfToolkit.FormatApex" class="dev.skrety.sftoolkit.apex.FormatApexAction"
+                    text="Format with Prettier Apex"
+                    description="Format the current Apex file via npx prettier-plugin-apex"/>
         </group>
     </actions>
 </idea-plugin>

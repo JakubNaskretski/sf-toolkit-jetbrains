@@ -63,6 +63,24 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
         Files.writeString(describeFile(schema.name), gson.toJson(schema))
     }
 
+    /** Every fresh cached describe (faux-class generation input). */
+    fun allCachedDescribes(): List<ObjectSchema> {
+        val dir = root.resolve("describes")
+        if (!Files.isDirectory(dir)) return emptyList()
+        return Files.list(dir).use { stream ->
+            stream.filter { it.fileName.toString().endsWith(".json") && isFresh(it) }
+                .map { file ->
+                    memoized(file) { text ->
+                        gson.fromJson(text, ObjectSchema::class.java)
+                            ?.takeIf { it.name.isNotBlank() && it.fields.isNotEmpty() }
+                    }
+                }
+                .filter { it != null }
+                .map { it!! }
+                .toList()
+        }
+    }
+
     private fun isFresh(file: Path): Boolean = try {
         Files.isRegularFile(file) &&
             System.currentTimeMillis() - Files.getLastModifiedTime(file).toMillis() < maxAgeMs
