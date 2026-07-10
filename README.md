@@ -41,6 +41,11 @@ Requirements on the machine running the IDE:
 - **Apex test runner** — right-click a test class → Run Apex Tests in Class;
   pass/fail summary with per-failure messages and stack traces in the SF Log
 
+- **Search scopes** — "SF: Apex", "SF: SOQL", "SF: Metadata XML" and
+  "SF: All Salesforce Source" appear in the Scope dropdown of Find in Files,
+  usages, inspections and the TODO view (plain file masks like `*.cls` work
+  natively in the File mask box)
+
 Every CLI call is logged (queries redacted) to the **SF Log** tool window.
 
 ## Build from source (only for development)
