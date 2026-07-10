@@ -1,11 +1,5 @@
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij">
         <textmate.bundleProvider implementation="dev.skrety.sftoolkit.textmate.ApexTextMateBundleProvider"/>
-        <!-- Our registered file types block TextMate's own takeover, so route their
-             editor highlighting back to the TextMate grammars explicitly. -->
-        <editorHighlighterProvider filetype="Apex"
-                                   implementationClass="dev.skrety.sftoolkit.textmate.SfTextMateEditorHighlighterProvider"/>
-        <editorHighlighterProvider filetype="SOQL"
-                                   implementationClass="dev.skrety.sftoolkit.textmate.SfTextMateEditorHighlighterProvider"/>
     </extensions>
 </idea-plugin>

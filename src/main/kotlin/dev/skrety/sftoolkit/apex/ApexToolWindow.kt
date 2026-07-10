@@ -19,7 +19,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBFont
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
-import dev.skrety.sftoolkit.filetypes.ApexFileType
+import dev.skrety.sftoolkit.filetypes.SfFileTypes
 import dev.skrety.sftoolkit.ui.OrgCombo
 import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
 import java.awt.BorderLayout
@@ -44,7 +44,7 @@ class ApexPanel(private val project: Project) : Disposable {
     private val codeField = EditorTextField(
         EditorFactory.getInstance().createDocument("System.debug('hello');"),
         project,
-        ApexFileType,
+        SfFileTypes.apex(),
         false,
         false,
     )

@@ -1,33 +1,28 @@
 package dev.skrety.sftoolkit.filetypes
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.vfs.VirtualFile
-import javax.swing.Icon
+import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.PlainTextFileType
+import com.intellij.testFramework.LightVirtualFile
 
 /**
- * Real file types for Salesforce sources: project-view icons + a Settings → File Types
- * entry. Deliberately NOT LanguageFileTypes — no PSI/parser claims. Highlighting is
- * delegated back to the TextMate grammars via SfTextMateEditorHighlighterProvider
- * (registering a concrete type stops TextMate's own takeover, verified against
- * TextMateFileType.isMyFileType in the 242 sources).
+ * Resolves the file type the platform assigns to a Salesforce file name — which is
+ * TextMate's own type once our grammar is registered, so tool-window editor panes get
+ * the same native highlighting as real files on disk. Falls back to plain text.
+ *
+ * We deliberately do NOT register our own FileType for .cls/.trigger/.apex/.soql:
+ * a concrete type blocks TextMate's native highlighting, and the custom
+ * editorHighlighterProvider delegation did not apply colors in practice.
  */
-object ApexFileType : FileType {
-    override fun getName(): String = "Apex"
-    override fun getDescription(): String = "Salesforce Apex source"
-    override fun getDefaultExtension(): String = "cls"
-    override fun getIcon(): Icon = AllIcons.Nodes.Class
-    override fun isBinary(): Boolean = false
-    override fun isReadOnly(): Boolean = false
-    override fun getCharset(file: VirtualFile, content: ByteArray): String? = null
-}
+object SfFileTypes {
+    fun forName(fileName: String): FileType = try {
+        val byName = FileTypeManager.getInstance().getFileTypeByFileName(fileName)
+        if (byName !is com.intellij.openapi.fileTypes.UnknownFileType) byName
+        else FileTypeManager.getInstance().getFileTypeByFile(LightVirtualFile(fileName, ""))
+    } catch (_: Throwable) {
+        PlainTextFileType.INSTANCE
+    }
 
-object SoqlFileType : FileType {
-    override fun getName(): String = "SOQL"
-    override fun getDescription(): String = "Salesforce SOQL query"
-    override fun getDefaultExtension(): String = "soql"
-    override fun getIcon(): Icon = AllIcons.Nodes.DataTables
-    override fun isBinary(): Boolean = false
-    override fun isReadOnly(): Boolean = false
-    override fun getCharset(file: VirtualFile, content: ByteArray): String? = null
+    fun apex(): FileType = forName("SfToolkitScratch.apex")
+    fun soql(): FileType = forName("SfToolkitScratch.soql")
 }

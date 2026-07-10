@@ -34,14 +34,19 @@ class SoqlCompletionProvider(
         val objectNames = schema.objectNames(org)
         if (objectNames == null) {
             hint("Caching org schema for completion — retry in a few seconds")
+            LOG.info("SFDIAG soql getItems: no objectNames cache for $org")
             return emptyList()
         }
-        return soqlSuggestions(ctx, objectNames, { schema.describe(org, it) })
+        val out = soqlSuggestions(ctx, objectNames, { schema.describe(org, it) })
+        LOG.info("SFDIAG soql getItems: clause=${ctx.clause} obj=${ctx.objectName} prefix='${ctx.prefix}' -> ${out.size} items")
+        return out
     }
 
     /** Dotted chains (Owner.Al) must be treated as one prefix, not split at the dot. */
     override fun getPrefix(text: String, offset: Int): String =
         soqlContextAt(text, offset).prefix
+
+    private val LOG = com.intellij.openapi.diagnostic.Logger.getInstance(SoqlCompletionProvider::class.java)
 
     private fun hint(message: String) {
         val now = System.currentTimeMillis()

@@ -24,7 +24,7 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.table.JBTable
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
-import dev.skrety.sftoolkit.filetypes.SoqlFileType
+import dev.skrety.sftoolkit.filetypes.SfFileTypes
 import dev.skrety.sftoolkit.schema.OrgSchemaService
 import dev.skrety.sftoolkit.ui.OrgCombo
 import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
@@ -50,7 +50,7 @@ class SoqlPanel(private val project: Project) : Disposable {
     private val queryField = EditorTextField(
         EditorFactory.getInstance().createDocument("SELECT Id, Name FROM Account"),
         project,
-        SoqlFileType,
+        SfFileTypes.soql(),
         false,
         false,
     )
