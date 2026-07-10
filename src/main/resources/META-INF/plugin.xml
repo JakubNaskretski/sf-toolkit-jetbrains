@@ -45,6 +45,9 @@
         <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true" canCloseContents="true"
                     icon="AllIcons.Actions.Execute"
                     factoryClass="dev.skrety.sftoolkit.apex.ApexToolWindowFactory"/>
+        <toolWindow id="Apex Logs" anchor="bottom" secondary="true"
+                    icon="AllIcons.Debugger.Console"
+                    factoryClass="dev.skrety.sftoolkit.apex.ApexLogsToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
         <customScopesProvider implementation="dev.skrety.sftoolkit.SfSearchScopes"/>
         <!-- Icons + Settings→File Types entries; highlighting delegated to TextMate

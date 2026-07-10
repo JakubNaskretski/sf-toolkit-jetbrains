@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbAwareAction
@@ -62,6 +63,10 @@ class SoqlPanel(private val project: Project) : Disposable {
     private val runButton = JButton("Run", com.intellij.icons.AllIcons.Actions.Execute).apply {
         toolTipText = "Run query (Ctrl/Cmd+Enter). Click again to cancel."
     }
+    private val historyButton = JButton(com.intellij.icons.AllIcons.Vcs.History).apply {
+        toolTipText = "Query history (last 25 runs)"
+        isFocusable = false
+    }
     private val exportButton = JButton("Export CSV").apply {
         toolTipText = "Save the fetched rows as CSV (formula-injection-safe quoting)"
         isEnabled = false
@@ -102,6 +107,7 @@ class SoqlPanel(private val project: Project) : Disposable {
             add(runButton)
         }
         orgCombo.addTo(toolbar)
+        toolbar.add(historyButton)
         toolbar.add(autoLimit)
         toolbar.add(syncButton)
         toolbar.add(exportButton)
@@ -118,6 +124,7 @@ class SoqlPanel(private val project: Project) : Disposable {
         runButton.addActionListener { toggleRun() }
         syncButton.addActionListener { syncSchema() }
         exportButton.addActionListener { exportCsv() }
+        historyButton.addActionListener { showHistory() }
         table.componentPopupMenu = javax.swing.JPopupMenu().apply {
             add(javax.swing.JMenuItem("Open Record in Org").apply {
                 addActionListener { openSelectedRecord() }
@@ -224,6 +231,7 @@ class SoqlPanel(private val project: Project) : Disposable {
                             lastCols = cols
                             lastRows = rows
                             exportButton.isEnabled = rows.isNotEmpty()
+                            SoqlHistory.get(project).add(raw)
                             statusLabel.text = "$total row(s) — $org" +
                                 if (records.size > MAX_ROWS) " (showing first $MAX_ROWS)" else ""
                         }
@@ -246,6 +254,22 @@ class SoqlPanel(private val project: Project) : Disposable {
                 runButton.icon = com.intellij.icons.AllIcons.Actions.Execute
             }
         }.queue()
+    }
+
+    private fun showHistory() {
+        val entries = SoqlHistory.get(project).entries()
+        if (entries.isEmpty()) {
+            statusLabel.text = "No query history yet"
+            return
+        }
+        JBPopupFactory.getInstance()
+            .createPopupChooserBuilder(entries)
+            .setRenderer { _, value, _, _, _ ->
+                javax.swing.JLabel(value.replace(Regex("\\s+"), " ").take(90))
+            }
+            .setItemChosenCallback { chosen -> queryField.text = chosen }
+            .createPopup()
+            .showUnderneathOf(historyButton)
     }
 
     private fun exportCsv() {
