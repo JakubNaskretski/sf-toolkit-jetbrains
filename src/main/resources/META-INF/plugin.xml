@@ -45,6 +45,9 @@
         <toolWindow id="Apex Logs" anchor="bottom" secondary="true"
                     icon="AllIcons.Debugger.Console"
                     factoryClass="dev.skrety.sftoolkit.apex.ApexLogsToolWindowFactory"/>
+        <toolWindow id="SF Results" anchor="bottom" secondary="true"
+                    icon="AllIcons.Toolwindows.ToolWindowChanges"
+                    factoryClass="dev.skrety.sftoolkit.results.SfResultsToolWindowFactory"/>
         <postStartupActivity implementation="dev.skrety.sftoolkit.SfStartup"/>
         <customScopesProvider implementation="dev.skrety.sftoolkit.SfSearchScopes"/>
     </extensions>

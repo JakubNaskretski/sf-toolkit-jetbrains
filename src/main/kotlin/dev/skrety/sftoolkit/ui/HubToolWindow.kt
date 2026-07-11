@@ -56,6 +56,7 @@ class HubPanel(private val project: Project) : Disposable {
             add(actionButton("SOQL Queries", AllIcons.Nodes.DataTables) { open("SOQL") })
             add(actionButton("Anonymous Apex", AllIcons.Actions.Execute) { open("Anonymous Apex") })
             add(actionButton("Apex Debug Logs", AllIcons.Debugger.Console) { open("Apex Logs") })
+            add(actionButton("Deploy Results", AllIcons.Toolwindows.ToolWindowChanges) { open("SF Results") })
             add(actionButton("CLI Log", AllIcons.Toolwindows.ToolWindowMessages) { open("SF Log") })
 
             add(TitledSeparator("Apex Schema & Tools"))

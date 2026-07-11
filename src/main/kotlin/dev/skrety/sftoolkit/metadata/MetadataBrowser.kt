@@ -26,8 +26,11 @@ import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
 import dev.skrety.sftoolkit.SfLog
 import dev.skrety.sftoolkit.compareFileWithOrgInBackground
-import dev.skrety.sftoolkit.notifySourceOutcome
-import dev.skrety.sftoolkit.sourceFailureLines
+import dev.skrety.sftoolkit.publishAndNotify
+import dev.skrety.sftoolkit.results.DeployRunner
+import dev.skrety.sftoolkit.results.RunKind
+import dev.skrety.sftoolkit.results.SourceFileResult
+import dev.skrety.sftoolkit.results.toSourceFileResults
 import dev.skrety.sftoolkit.sourceFiles
 import dev.skrety.sftoolkit.str
 import dev.skrety.sftoolkit.toolingRefForTypeName
@@ -176,8 +179,8 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
                 loadCachedRows()
             }
         }
-        retrieveButton.addActionListener { runOnChecked("Retrieving from org…", "Retrieved", retrieve = true) }
-        deployButton.addActionListener { runOnChecked("Deploying to org…", "Deployed", retrieve = false) }
+        retrieveButton.addActionListener { runOnChecked("Retrieving from org…", retrieve = true) }
+        deployButton.addActionListener { runOnChecked("Deploying to org…", retrieve = false) }
         compareButton.addActionListener { compareChecked() }
         search.addDocumentListener(object : DocumentListener {
             override fun insertUpdate(e: DocumentEvent) = filterAlarm.cancelAndRequest()
@@ -372,45 +375,64 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
         }
     }
 
-    private fun runOnChecked(progressTitle: String, pastVerb: String, retrieve: Boolean) {
+    private fun runOnChecked(progressTitle: String, retrieve: Boolean) {
         if (actionInFlight || listing) return
         val org = currentOrg() ?: return
         val root = sfdxRoot() ?: return
         val targets = checkedRows().filter { if (retrieve) it.org else it.local }
         if (targets.isEmpty()) return
-        val base = if (retrieve) listOf("project", "retrieve", "start") else listOf("project", "deploy", "start")
         val chunks = targets.chunked(COMPONENTS_PER_CALL)
         actionInFlight = true
         updateButtons()
 
         object : Task.Backgroundable(project, progressTitle, true) {
             override fun run(indicator: ProgressIndicator) {
-                var fileCount = 0
-                val failureLines = ArrayList<String>()
+                indicator.isIndeterminate = false
+                val t0 = System.currentTimeMillis()
+                val all = ArrayList<SourceFileResult>()
                 var hardError: String? = null
                 for ((i, chunk) in chunks.withIndex()) {
                     indicator.checkCanceled()
                     if (chunks.size > 1) indicator.text = "Batch ${i + 1} of ${chunks.size}…"
-                    indicator.fraction = i.toDouble() / chunks.size
                     val metadataArgs = chunk.flatMap { listOf("--metadata", "${it.type}:${it.name}") }
-                    val res = SfCli.get(project).execute(
-                        base + listOf("-o", org) + metadataArgs,
-                        indicator,
-                        timeoutMs = 600_000,
-                        workDir = root.toString(),
-                    )
-                    if (res.cancelled) return
-                    val files = sourceFiles(res.resultObj())
-                    fileCount += files.size
-                    val chunkFailures = sourceFailureLines(files)
-                    failureLines += chunkFailures
-                    if (!res.ok && chunkFailures.isEmpty()) {
-                        hardError = res.errorMessage()
-                        break
+                    if (retrieve) {
+                        // retrieve has no async/report CLI — blocking per chunk
+                        indicator.fraction = i.toDouble() / chunks.size
+                        val res = SfCli.get(project).execute(
+                            listOf("project", "retrieve", "start", "-o", org) + metadataArgs,
+                            indicator,
+                            timeoutMs = 600_000,
+                            workDir = root.toString(),
+                        )
+                        if (res.cancelled) return
+                        val files = toSourceFileResults(sourceFiles(res.resultObj()))
+                        all += files
+                        if (!res.ok && files.none { it.failed }) {
+                            hardError = res.errorMessage()
+                            break
+                        }
+                    } else {
+                        // deploy: shared async helper; each chunk owns its slice of the bar
+                        val outcome = DeployRunner.runAsyncDeploy(
+                            project, org, root.toString(), metadataArgs,
+                            dryRun = false, indicator = indicator,
+                            fractionBase = i.toDouble() / chunks.size,
+                            fractionSpan = 1.0 / chunks.size,
+                        )
+                        if (outcome.cancelled) return
+                        all += outcome.report?.files.orEmpty()
+                        if (outcome.hardError != null) {
+                            hardError = outcome.hardError
+                            break
+                        }
                     }
                 }
-                notifySourceOutcome(project, org, pastVerb, fileCount, failureLines, hardError)
-                if (retrieve && fileCount > 0) {
+                val kind = if (retrieve) RunKind.RETRIEVE else RunKind.DEPLOY
+                publishAndNotify(
+                    project, kind, org, root.toString(), all,
+                    System.currentTimeMillis() - t0, hardError,
+                )
+                if (retrieve && all.isNotEmpty()) {
                     // VFS refresh is project-level — runs even after the dialog closed.
                     ApplicationManager.getApplication().invokeLater {
                         if (project.isDisposed) return@invokeLater

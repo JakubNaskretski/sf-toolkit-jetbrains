@@ -13,15 +13,23 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import dev.skrety.sftoolkit.results.DeployRunner
+import dev.skrety.sftoolkit.results.RunKind
+import dev.skrety.sftoolkit.results.RunResult
+import dev.skrety.sftoolkit.results.SfResultsService
+import dev.skrety.sftoolkit.results.SourceFileResult
+import dev.skrety.sftoolkit.results.toSourceFileResults
 
 /** Base for retrieve / deploy / validate over the Project-view or editor selection. */
-abstract class SourceCliAction(
-    private val progressTitle: String,
-    private val pastVerb: String,
-) : DumbAwareAction() {
+abstract class SfSelectionAction(private val progressTitle: String) : DumbAwareAction() {
 
-    protected abstract fun cliArgs(org: String, sourceDirArgs: List<String>): List<String>
-    protected open val refreshVfsAfter: Boolean = false
+    protected abstract fun perform(
+        project: Project,
+        org: String,
+        root: VirtualFile,
+        files: List<VirtualFile>,
+        indicator: ProgressIndicator,
+    )
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -38,28 +46,40 @@ abstract class SourceCliAction(
         if (files.isEmpty()) return
         val org = OrgService.get(project).requireCurrent() ?: return
         val root = findSfdxRoot(files.first(), project.guessProjectDir()) ?: return
-        val sourceDirArgs = files.flatMap { listOf("--source-dir", it.path) }
 
         object : Task.Backgroundable(project, progressTitle, true) {
             override fun run(indicator: ProgressIndicator) {
-                val res = SfCli.get(project).execute(
-                    cliArgs(org, sourceDirArgs),
-                    indicator,
-                    timeoutMs = 600_000,
-                    workDir = root.path,
-                )
-                if (res.cancelled) return
-                reportSourceResult(project, res, org, pastVerb)
-                if (refreshVfsAfter && res.ok) refreshVfs(files)
+                perform(project, org, root, files, indicator)
             }
         }.queue()
     }
 
-    private fun refreshVfs(files: List<VirtualFile>) {
+    protected fun refreshVfs(files: List<VirtualFile>) {
         ApplicationManager.getApplication().invokeLater {
             VfsUtil.markDirtyAndRefresh(true, true, true, *files.toTypedArray())
         }
     }
+
+    protected fun sourceDirArgs(files: List<VirtualFile>): List<String> =
+        files.flatMap { listOf("--source-dir", it.path) }
+}
+
+/** Results window + balloon, for every deploy/validate/retrieve surface. */
+fun publishAndNotify(
+    project: Project,
+    kind: RunKind,
+    org: String,
+    baseDir: String?,
+    files: List<SourceFileResult>,
+    durationMs: Long,
+    hardError: String?,
+) {
+    val run = RunResult(kind, org, baseDir, files, durationMs, hardError)
+    SfResultsService.get(project).publish(run) // auto-shows the window on failure only
+    notifySourceOutcome(
+        project, org, kind.verbed, files.size,
+        files.filter { it.failed }.map { it.failureLine() }, hardError,
+    )
 }
 
 /** Pure: component files from a deploy/retrieve result envelope. */
@@ -102,29 +122,52 @@ fun notifySourceOutcome(
     ).notify(project)
 }
 
-/** Shared result reporting for a single CLI invocation. */
-fun reportSourceResult(project: Project, res: SfResult, org: String, pastVerb: String) {
-    val files = sourceFiles(res.resultObj())
-    val failureLines = sourceFailureLines(files)
-    if (res.ok && failureLines.isEmpty()) {
-        notifySourceOutcome(project, org, pastVerb, files.size, emptyList())
-    } else {
-        notifySourceOutcome(project, org, pastVerb, files.size, failureLines, res.errorMessage())
+/** Retrieve stays BLOCKING — `sf project retrieve` has no async/report/resume (verified). */
+class RetrieveAction : SfSelectionAction("Retrieving from org…") {
+    override fun perform(
+        project: Project, org: String, root: VirtualFile,
+        files: List<VirtualFile>, indicator: ProgressIndicator,
+    ) {
+        val t0 = System.currentTimeMillis()
+        val res = SfCli.get(project).execute(
+            listOf("project", "retrieve", "start", "-o", org) + sourceDirArgs(files),
+            indicator,
+            timeoutMs = 600_000,
+            workDir = root.path,
+        )
+        if (res.cancelled) return
+        val results = toSourceFileResults(sourceFiles(res.resultObj()))
+        val hardError = if (!res.ok && results.none { it.failed }) res.errorMessage() else null
+        publishAndNotify(
+            project, RunKind.RETRIEVE, org, root.path, results,
+            System.currentTimeMillis() - t0, hardError,
+        )
+        if (res.ok) refreshVfs(files)
     }
 }
 
-class RetrieveAction : SourceCliAction("Retrieving from org…", "Retrieved") {
-    override val refreshVfsAfter = true
-    override fun cliArgs(org: String, sourceDirArgs: List<String>) =
-        listOf("project", "retrieve", "start", "-o", org) + sourceDirArgs
+/** Deploy/validate go async: live component/test counts and a cancel that cancels the job. */
+abstract class AsyncDeployAction(
+    title: String,
+    private val kind: RunKind,
+    private val dryRun: Boolean,
+) : SfSelectionAction(title) {
+    override fun perform(
+        project: Project, org: String, root: VirtualFile,
+        files: List<VirtualFile>, indicator: ProgressIndicator,
+    ) {
+        val t0 = System.currentTimeMillis()
+        val outcome = DeployRunner.runAsyncDeploy(
+            project, org, root.path, sourceDirArgs(files), dryRun, indicator,
+        )
+        if (outcome.cancelled) return
+        publishAndNotify(
+            project, kind, org, root.path, outcome.report?.files.orEmpty(),
+            System.currentTimeMillis() - t0, outcome.hardError,
+        )
+    }
 }
 
-class DeployAction : SourceCliAction("Deploying to org…", "Deployed") {
-    override fun cliArgs(org: String, sourceDirArgs: List<String>) =
-        listOf("project", "deploy", "start", "-o", org) + sourceDirArgs
-}
+class DeployAction : AsyncDeployAction("Deploying to org…", RunKind.DEPLOY, dryRun = false)
 
-class ValidateAction : SourceCliAction("Validating deploy (dry run)…", "Validated") {
-    override fun cliArgs(org: String, sourceDirArgs: List<String>) =
-        listOf("project", "deploy", "start", "--dry-run", "-o", org) + sourceDirArgs
-}
+class ValidateAction : AsyncDeployAction("Validating deploy (dry run)…", RunKind.VALIDATE, dryRun = true)
