@@ -4,7 +4,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
@@ -12,15 +11,16 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.EditorTextField
 import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.TextFieldWithAutoCompletion
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.util.ui.JBFont
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
-import dev.skrety.sftoolkit.filetypes.SfFileTypes
+import dev.skrety.sftoolkit.schema.SchemaSync
 import dev.skrety.sftoolkit.ui.OrgCombo
+import dev.skrety.sftoolkit.ui.SfPaneTextField
 import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -41,13 +41,9 @@ class ApexToolWindowFactory : ToolWindowFactory, DumbAware {
 
 class ApexPanel(private val project: Project) : Disposable {
 
-    private val codeField = EditorTextField(
-        EditorFactory.getInstance().createDocument("System.debug('hello');"),
-        project,
-        SfFileTypes.apex(),
-        false,
-        false,
-    )
+    // PSI-backed plain-text document + explicit TextMate highlighter — the only
+    // combination where completion AND colors both work (see SfPaneTextField).
+    private val codeField = SfPaneTextField(project, "Script.apex", "System.debug('hello');")
     // Local selection: each tab targets its own org (IC2-style), project org untouched.
     private val orgCombo = OrgCombo(project, syncToProject = false)
     private val runButton = JButton("Run", com.intellij.icons.AllIcons.Actions.Execute).apply {
@@ -91,6 +87,23 @@ class ApexPanel(private val project: Project) : Disposable {
                 if (!inFlight) toggleRun()
             }
         }.registerCustomShortcutSet(CustomShortcutSet.fromString("ctrl ENTER", "meta ENTER"), codeField)
+        // Keywords + org sObject names + field completion after "Account." — cache-only.
+        autoSyncSchemaIfNeeded()
+        TextFieldWithAutoCompletion.installCompletion(
+            codeField.document,
+            project,
+            ApexCompletionProvider(
+                project,
+                { orgCombo.selectedOrg ?: OrgService.get(project).current },
+                { msg ->
+                    ApplicationManager.getApplication().invokeLater {
+                        statusLabel.text = msg
+                        autoSyncSchemaIfNeeded()
+                    }
+                },
+            ),
+            true,
+        )
 
         statusLabel.border = com.intellij.util.ui.JBUI.Borders.empty(3, 8)
         return OnePixelSplitter(true, "sfToolkit.apex.splitter", 0.4f).apply {
@@ -101,6 +114,12 @@ class ApexPanel(private val project: Project) : Disposable {
 
     override fun dispose() {
         orgCombo.dispose()
+    }
+
+    private fun autoSyncSchemaIfNeeded() {
+        SchemaSync.autoSyncIfNeeded(project, orgCombo.selectedOrg ?: OrgService.get(project).current) {
+            statusLabel.text = it
+        }
     }
 
     private fun toggleRun() {

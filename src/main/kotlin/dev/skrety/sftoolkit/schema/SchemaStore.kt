@@ -63,6 +63,21 @@ class SchemaStore(private val root: Path, private val maxAgeMs: Long = DEFAULT_M
         Files.writeString(describeFile(schema.name), gson.toJson(schema))
     }
 
+    /** Wipes the completion caches (objects + describes) — metadata-rows stay untouched. */
+    fun clearSchemaCache() {
+        try {
+            Files.deleteIfExists(objectsFile)
+            val dir = root.resolve("describes")
+            if (Files.isDirectory(dir, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                Files.list(dir).use { stream ->
+                    stream.filter { Files.isRegularFile(it) }.forEach { Files.deleteIfExists(it) }
+                }
+            }
+        } catch (_: Exception) {
+            // stale cache beats a crash; the resync overwrites what matters
+        }
+    }
+
     /** Metadata-browser listing cache: survive IDE restarts (field request). */
     fun readMetadataRows(): List<dev.skrety.sftoolkit.metadata.MetaRow>? {
         val file = root.resolve("metadata-rows.json")

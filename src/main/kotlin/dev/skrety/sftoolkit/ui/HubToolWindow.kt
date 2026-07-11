@@ -50,15 +50,18 @@ class HubPanel(private val project: Project) : Disposable {
 
             add(TitledSeparator("Windows"))
             add(actionButton(
-                "Org Metadata Browser",
+                "Retrieve Metadata…",
                 com.intellij.openapi.util.IconLoader.getIcon("/icons/sfMetadata.svg", HubPanel::class.java),
-            ) { open("SF Metadata") })
+            ) { execute("SfToolkit.RetrieveMetadata") })
             add(actionButton("SOQL Queries", AllIcons.Nodes.DataTables) { open("SOQL") })
             add(actionButton("Anonymous Apex", AllIcons.Actions.Execute) { open("Anonymous Apex") })
             add(actionButton("Apex Debug Logs", AllIcons.Debugger.Console) { open("Apex Logs") })
             add(actionButton("CLI Log", AllIcons.Toolwindows.ToolWindowMessages) { open("SF Log") })
 
             add(TitledSeparator("Apex Schema & Tools"))
+            add(actionButton("Refresh Org Schema", AllIcons.Actions.Refresh) {
+                execute("SfToolkit.RefreshOrgSchema")
+            })
             add(actionButton("Generate Apex sObject Definitions", AllIcons.Actions.Download) {
                 execute("SfToolkit.GenerateSObjects")
             })

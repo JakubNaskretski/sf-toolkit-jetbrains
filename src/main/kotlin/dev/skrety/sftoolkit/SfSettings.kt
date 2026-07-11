@@ -19,6 +19,9 @@ class SfSettings : SimplePersistentStateComponent<SfSettings.MyState>(MyState())
     class MyState : BaseState() {
         var sfPath by string()
         var apexLspJarPath by string()
+
+        // Survives restarts — the LSP4IJ enable/disable toggle used to silently reset.
+        var apexLspEnabled by property(true)
     }
 
     companion object {

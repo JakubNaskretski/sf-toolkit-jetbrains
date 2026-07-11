@@ -22,12 +22,17 @@ fun setupTabbedToolWindow(
     tabPrefix: String,
     createPanel: () -> Pair<JComponent, Disposable>,
 ) {
+    // Monotonic per window — count-based names duplicate after closing tabs
+    // ("Query 2" twice once Query 1 is closed and + is clicked).
+    var tabCounter = 0
+
     fun addTab() {
         if (project.isDisposed || toolWindow.isDisposed) return
         val (component, disposer) = createPanel()
         val contentManager = toolWindow.contentManager
+        tabCounter++
         val content = ContentFactory.getInstance()
-            .createContent(component, "$tabPrefix ${contentManager.contentCount + 1}", false)
+            .createContent(component, "$tabPrefix $tabCounter", false)
         content.isCloseable = true
         content.setDisposer(disposer)
         contentManager.addContent(content)

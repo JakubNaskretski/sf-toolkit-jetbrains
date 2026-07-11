@@ -38,7 +38,7 @@ class HealthCheckAction : DumbAwareAction() {
                     add("Current org: " + (org ?: "none selected"))
                     if (org != null) {
                         val objects = OrgSchemaService.get(project).objectNames(org)?.size
-                        add("Schema cache: " + (objects?.let { "$it objects" } ?: "empty — click Sync Schema in the SOQL window"))
+                        add("Schema cache: " + (objects?.let { "$it objects" } ?: "empty — builds itself on first SOQL/Apex pane use, or run Tools → SF Toolkit → Refresh Org Schema"))
                     }
                 }
                 val log = SfLog.get(project)

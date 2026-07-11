@@ -141,6 +141,47 @@ class SfStartup : ProjectActivity {
         // Unsolicited: never nag non-Salesforce projects / machines without the CLI.
         refreshOrgsInBackground(project, quiet = true)
         logIntegrationHealth(project)
+        logClsResolutionProbe(project)
+    }
+
+    /**
+     * TEMP probe — remove once main-editor .cls colors are field-confirmed. Resolves a
+     * REAL project .cls the way the editor does (getFileTypeByFile + the VirtualFile
+     * highlighter overload; getFileTypeByFileName reports UNKNOWN even when TextMate
+     * claims the file, so it must not be used here). One greppable SFPROBE line in idea.log.
+     */
+    private fun logClsResolutionProbe(project: Project) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val log = com.intellij.openapi.diagnostic.Logger.getInstance(SfStartup::class.java)
+            try {
+                val roots = com.intellij.openapi.roots.ProjectRootManager.getInstance(project).contentRoots
+                var cls: com.intellij.openapi.vfs.VirtualFile? = null
+                for (root in roots) {
+                    com.intellij.openapi.vfs.VfsUtilCore.iterateChildrenRecursively(root, null) { vf ->
+                        if (!vf.isDirectory && vf.name.endsWith(".cls", true)) cls = vf
+                        cls == null
+                    }
+                    if (cls != null) break
+                }
+                val vf = cls
+                if (vf == null) {
+                    log.info("SFPROBE no .cls under content roots")
+                    return@executeOnPooledThread
+                }
+                ApplicationManager.getApplication().runReadAction {
+                    val ft = com.intellij.openapi.fileTypes.FileTypeManager.getInstance().getFileTypeByFile(vf)
+                    val scheme = com.intellij.openapi.editor.colors.EditorColorsManager.getInstance().globalScheme
+                    val hl = com.intellij.openapi.editor.highlighter.EditorHighlighterFactory.getInstance()
+                        .createEditorHighlighter(vf, scheme, project)
+                    log.info(
+                        "SFPROBE ${vf.name}: fileType=${ft.name} (${ft.javaClass.simpleName}) " +
+                            "highlighter=${hl.javaClass.simpleName}",
+                    )
+                }
+            } catch (t: Throwable) {
+                log.info("SFPROBE failed: $t")
+            }
+        }
     }
 
     /** One-line health report per subsystem into SF Log — field debugging. */

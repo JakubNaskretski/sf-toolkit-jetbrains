@@ -34,11 +34,11 @@ class SoqlCompletionProvider(
         val objectNames = schema.objectNames(org)
         if (objectNames == null) {
             hint("Caching org schema for completion — retry in a few seconds")
-            LOG.info("SFDIAG soql getItems: no objectNames cache for $org")
             return emptyList()
         }
         val out = soqlSuggestions(ctx, objectNames, { schema.describe(org, it) })
-        LOG.info("SFDIAG soql getItems: clause=${ctx.clause} obj=${ctx.objectName} prefix='${ctx.prefix}' -> ${out.size} items")
+        // never log user-typed query text (family rule) — clause + count only, debug-gated
+        if (LOG.isDebugEnabled) LOG.debug("soql completion: clause=${ctx.clause} items=${out.size}")
         return out
     }
 

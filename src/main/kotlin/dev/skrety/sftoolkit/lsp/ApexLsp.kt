@@ -17,20 +17,17 @@ import java.nio.file.Path
  */
 class ApexLspFactory : LanguageServerFactory, LanguageServerEnablementSupport {
 
-    override fun isEnabled(project: Project): Boolean = userEnabled && findApexLspJar() != null
+    override fun isEnabled(project: Project): Boolean =
+        SfSettings.get().state.apexLspEnabled && findApexLspJar() != null
 
+    // ponytail: app-wide toggle (LSP4IJ's UI is effectively global for us anyway);
+    // key off the project param if per-project ever matters
     override fun setEnabled(enabled: Boolean, project: Project) {
-        userEnabled = enabled
+        SfSettings.get().state.apexLspEnabled = enabled
     }
 
     override fun createConnectionProvider(project: Project): StreamConnectionProvider =
         ApexLspConnectionProvider(project)
-
-    companion object {
-        // ponytail: in-memory toggle; persist in SfSettings if anyone ever asks for it
-        @Volatile
-        private var userEnabled = true
-    }
 }
 
 class ApexLspConnectionProvider(project: Project) : ProcessStreamConnectionProvider() {

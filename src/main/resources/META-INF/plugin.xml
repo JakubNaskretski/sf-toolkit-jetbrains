@@ -21,8 +21,6 @@
     <applicationListeners>
         <listener class="dev.skrety.sftoolkit.SfAppHealth"
                   topic="com.intellij.ide.AppLifecycleListener"/>
-        <listener class="dev.skrety.sftoolkit.DiagProbe"
-                  topic="com.intellij.ide.AppLifecycleListener"/>
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -41,9 +39,6 @@
         <toolWindow id="SF Toolkit" anchor="left"
                     icon="/icons/sfCloud.svg"
                     factoryClass="dev.skrety.sftoolkit.ui.HubToolWindowFactory"/>
-        <toolWindow id="SF Metadata" anchor="left" secondary="true"
-                    icon="/icons/sfMetadata.svg"
-                    factoryClass="dev.skrety.sftoolkit.metadata.MetadataToolWindowFactory"/>
         <toolWindow id="Anonymous Apex" anchor="bottom" secondary="true" canCloseContents="true"
                     icon="AllIcons.Actions.Execute"
                     factoryClass="dev.skrety.sftoolkit.apex.ApexToolWindowFactory"/>
@@ -60,6 +55,15 @@
             <action id="SfToolkit.Login" class="dev.skrety.sftoolkit.LoginAction"
                     text="Log In to Salesforce Org…"
                     description="Authenticate a Salesforce org via sf org login web"/>
+            <action id="SfToolkit.RetrieveMetadata"
+                    class="dev.skrety.sftoolkit.metadata.RetrieveMetadataAction"
+                    icon="/icons/sfMetadata.svg"
+                    text="Retrieve Metadata…"
+                    description="Browse org + local metadata in a searchable tree, then retrieve / deploy / compare"/>
+            <action id="SfToolkit.RefreshOrgSchema"
+                    class="dev.skrety.sftoolkit.schema.RefreshOrgSchemaAction"
+                    text="Refresh Org Schema"
+                    description="Re-list sObjects and clear cached describes for the current org (SOQL/Apex completion data)"/>
             <action id="SfToolkit.HealthCheck" class="dev.skrety.sftoolkit.HealthCheckAction"
                     text="Run Health Check"
                     description="Report the status of every SF Toolkit integration"/>

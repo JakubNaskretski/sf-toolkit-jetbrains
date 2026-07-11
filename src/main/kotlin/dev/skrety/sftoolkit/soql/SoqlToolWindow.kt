@@ -4,7 +4,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CustomShortcutSet
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.progress.Task
@@ -13,7 +12,6 @@ import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.EditorTextField
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.TextFieldWithAutoCompletion
 import com.intellij.ui.TableSpeedSearch
@@ -24,9 +22,10 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.table.JBTable
 import dev.skrety.sftoolkit.OrgService
 import dev.skrety.sftoolkit.SfCli
-import dev.skrety.sftoolkit.filetypes.SfFileTypes
 import dev.skrety.sftoolkit.schema.OrgSchemaService
+import dev.skrety.sftoolkit.schema.SchemaSync
 import dev.skrety.sftoolkit.ui.OrgCombo
+import dev.skrety.sftoolkit.ui.SfPaneTextField
 import dev.skrety.sftoolkit.ui.setupTabbedToolWindow
 import java.awt.BorderLayout
 import java.awt.FlowLayout
@@ -47,13 +46,9 @@ class SoqlToolWindowFactory : ToolWindowFactory, DumbAware {
 
 class SoqlPanel(private val project: Project) : Disposable {
 
-    private val queryField = EditorTextField(
-        EditorFactory.getInstance().createDocument("SELECT Id, Name FROM Account"),
-        project,
-        SfFileTypes.soql(),
-        false,
-        false,
-    )
+    // PSI-backed plain-text document + explicit TextMate highlighter — the only
+    // combination where completion AND colors both work (see SfPaneTextField).
+    private val queryField = SfPaneTextField(project, "Query.soql", "SELECT Id, Name FROM Account")
     // Local selection: each query tab targets its own org (IC2-style); the status-bar
     // widget stays the project-wide switcher for retrieve/deploy.
     private val orgCombo = OrgCombo(project, syncToProject = false)
@@ -162,23 +157,10 @@ class SoqlPanel(private val project: Project) : Disposable {
 
     /** Quiet one-shot per org: completion works without the user knowing about caches. */
     private fun autoSyncSchemaIfNeeded() {
-        val org = orgCombo.selectedOrg ?: OrgService.get(project).current ?: return
-        val schema = OrgSchemaService.get(project)
-        if (schema.objectNames(org) != null || !syncingOrgs.add(org)) return
-        object : Task.Backgroundable(project, "Caching org schema for completion", true) {
-            private var count: Int? = null
-
-            override fun run(indicator: ProgressIndicator) {
-                count = schema.syncObjects(org, indicator)
-            }
-
-            override fun onFinished() {
-                syncingOrgs.remove(org)
-                count?.let { statusLabel.text = "Schema cached: $it objects — completion ready" }
-            }
-        }.queue()
+        SchemaSync.autoSyncIfNeeded(project, orgCombo.selectedOrg ?: OrgService.get(project).current) {
+            statusLabel.text = it
+        }
     }
-
 
     /** Run button doubles as Cancel while a query is in flight (family lesson: always cancellable). */
     private fun toggleRun() {
@@ -328,8 +310,5 @@ class SoqlPanel(private val project: Project) : Disposable {
 
     companion object {
         const val MAX_ROWS = 10_000
-
-        // single-flight guard for the quiet auto-sync, shared across tabs
-        private val syncingOrgs = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     }
 }

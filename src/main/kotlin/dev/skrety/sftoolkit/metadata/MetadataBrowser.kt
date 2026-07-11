@@ -8,20 +8,18 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
-import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
-import com.intellij.openapi.wm.ToolWindow
-import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.CheckboxTree
 import com.intellij.ui.CheckedTreeNode
 import com.intellij.ui.SearchTextField
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.content.ContentFactory
+import com.intellij.util.Alarm
+import com.intellij.util.SingleAlarm
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.tree.TreeUtil
 import dev.skrety.sftoolkit.OrgService
@@ -47,22 +45,15 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.tree.DefaultTreeModel
 
-class MetadataToolWindowFactory : ToolWindowFactory, DumbAware {
-    override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = MetadataBrowserPanel(project)
-        val content = ContentFactory.getInstance().createContent(panel.component, "", false)
-        content.setDisposer(panel)
-        toolWindow.contentManager.addContent(content)
-    }
-}
-
 /**
  * IC2-style metadata browser: a checkbox tree grouped by metadata type. Check
  * components (or whole types) → Retrieve / Deploy; single check → Compare.
+ * Hosted by [RetrieveMetadataDialog]; the org combo is dialog-local so browsing
+ * another org never touches the project-wide retrieve/deploy target.
  */
 class MetadataBrowserPanel(private val project: Project) : Disposable {
 
-    private val orgCombo = OrgCombo(project) // browser = project-wide org, like retrieve/deploy
+    private val orgCombo = OrgCombo(project, syncToProject = false)
     private val listButton = JButton("List Metadata", AllIcons.Actions.Refresh)
     private val typesButton = JButton("Types…").apply {
         toolTipText = "Choose which metadata types get listed"
@@ -94,6 +85,17 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
     }
 
     private var rows: List<MetaRow> = emptyList()
+
+    /** Last listing/cache summary — restored when the last check is removed. */
+    private var listingSummary = " "
+
+    // 14k-component orgs: rebuilding on every keystroke pins the EDT — debounce.
+    private val filterAlarm = SingleAlarm(Runnable { rebuildTree() }, 250, this, Alarm.ThreadToUse.SWING_THREAD)
+
+    private var lastComboOrg: String? = null
+
+    @Volatile
+    private var disposed = false
 
     @Volatile
     private var listing = false
@@ -130,6 +132,10 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
         override fun toString(): String = type
     }
 
+    /** The org this browser acts on — its own combo, falling back to the project org. */
+    private fun currentOrg(): String? =
+        orgCombo.selectedOrg ?: OrgService.get(project).requireCurrent()
+
     private fun build(): JComponent {
         val toolbar = JPanel(com.intellij.util.ui.WrapLayout(FlowLayout.LEFT, 6, 4)).apply {
             add(listButton)
@@ -160,15 +166,25 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
         listButton.addActionListener { listMetadata() }
         typesButton.addActionListener { chooseTypes() }
         loadCachedRows()
+        lastComboOrg = orgCombo.selectedOrg
+        orgCombo.combo.addActionListener {
+            val now = orgCombo.selectedOrg
+            if (!disposed && now != lastComboOrg) {
+                lastComboOrg = now
+                rows = emptyList()
+                rebuildTree()
+                loadCachedRows()
+            }
+        }
         retrieveButton.addActionListener { runOnChecked("Retrieving from org…", "Retrieved", retrieve = true) }
         deployButton.addActionListener { runOnChecked("Deploying to org…", "Deployed", retrieve = false) }
         compareButton.addActionListener { compareChecked() }
-        search.textEditor.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = rebuildTree()
-            override fun removeUpdate(e: DocumentEvent) = rebuildTree()
-            override fun changedUpdate(e: DocumentEvent) = rebuildTree()
+        search.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = filterAlarm.cancelAndRequest()
+            override fun removeUpdate(e: DocumentEvent) = filterAlarm.cancelAndRequest()
+            override fun changedUpdate(e: DocumentEvent) = filterAlarm.cancelAndRequest()
         })
-        locationFilter.addActionListener { rebuildTree() }
+        locationFilter.addActionListener { filterAlarm.cancelAndRequest() }
 
         return JPanel(BorderLayout()).apply {
             add(north, BorderLayout.NORTH)
@@ -178,7 +194,9 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
     }
 
     override fun dispose() {
+        disposed = true
         orgCombo.dispose()
+        // filterAlarm cascades — registered with parentDisposable = this
     }
 
     /** Selected types persist per project (workspace-level, not in VCS). */
@@ -211,16 +229,17 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
 
     /** Restores the last listing from the per-org disk cache (field request: no re-list on restart). */
     private fun loadCachedRows() {
-        val org = OrgService.get(project).current ?: return
+        val org = orgCombo.selectedOrg ?: OrgService.get(project).current ?: return
         ApplicationManager.getApplication().executeOnPooledThread {
             val cached = dev.skrety.sftoolkit.schema.OrgSchemaService.get(project)
                 .store(org).readMetadataRows() ?: return@executeOnPooledThread
             ApplicationManager.getApplication().invokeLater {
-                if (project.isDisposed || rows.isNotEmpty()) return@invokeLater
+                if (project.isDisposed || disposed || rows.isNotEmpty()) return@invokeLater
                 rows = cached
                 rebuildTree()
-                statusLabel.text = "${cached.size} components — $org (cached; List Metadata refreshes)"
-                statusLabel.toolTipText = statusLabel.text
+                listingSummary = "${cached.size} components — $org (cached; List Metadata refreshes)"
+                statusLabel.text = listingSummary
+                statusLabel.toolTipText = listingSummary
             }
         }
     }
@@ -244,7 +263,7 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
 
     private fun listMetadata() {
         if (listing || actionInFlight) return
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = currentOrg() ?: return
         val root = sfdxRoot()
         if (root == null) {
             NotificationGroupManager.getInstance().getNotificationGroup("SF Toolkit")
@@ -262,6 +281,7 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
 
         object : Task.Backgroundable(project, "Listing Salesforce metadata", true) {
             override fun run(indicator: ProgressIndicator) {
+                indicator.isIndeterminate = false
                 val local = scanLocalComponents(packageDirs(root))
                 val org2names = LinkedHashMap<String, List<String>>()
                 var failedTypes = 0
@@ -288,12 +308,13 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
                 dev.skrety.sftoolkit.schema.OrgSchemaService.get(project)
                     .store(org).writeMetadataRows(merged)
                 ApplicationManager.getApplication().invokeLater {
-                    if (project.isDisposed) return@invokeLater
+                    if (project.isDisposed || disposed) return@invokeLater
                     rows = merged
                     rebuildTree()
-                    statusLabel.text = "${merged.size} components — $org" +
+                    listingSummary = "${merged.size} components — $org" +
                         if (failedTypes > 0) " ($failedTypes type(s) failed to list, see SF Log)" else ""
-                    statusLabel.toolTipText = statusLabel.text
+                    statusLabel.text = listingSummary
+                    statusLabel.toolTipText = listingSummary
                 }
             }
 
@@ -325,9 +346,11 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
             rootNode.add(typeNode)
         }
         treeModel.reload()
-        // Invisible root collapses on reload — without this the tree renders EMPTY
-        // (field bug: "14050 components but I can't see them").
-        if (text.isNotEmpty()) TreeUtil.expandAll(tree) else TreeUtil.expand(tree, 1)
+        // Invisible root collapses on reload — without an expand the tree renders EMPTY
+        // (field bug: "14050 components but I can't see them"). expandAll on thousands of
+        // filter matches pins the EDT, so it is capped.
+        if (text.isNotEmpty() && filtered.size < EXPAND_ALL_LIMIT) TreeUtil.expandAll(tree)
+        else TreeUtil.expand(tree, 1)
         updateButtons()
     }
 
@@ -341,14 +364,17 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
         deployButton.isEnabled = !busy && checked.any { it.local }
         compareButton.isEnabled = !busy && checked.size == 1 && checked[0].local && checked[0].org &&
             toolingRefForTypeName(checked[0].type, checked[0].name) != null
-        if (checked.isNotEmpty() && !busy) {
-            statusLabel.text = "${checked.size} component(s) checked"
+        compareButton.toolTipText =
+            "Compare supports Apex classes, triggers, pages and components (single selection)"
+        if (!busy) {
+            statusLabel.text =
+                if (checked.isNotEmpty()) "${checked.size} component(s) checked" else listingSummary
         }
     }
 
     private fun runOnChecked(progressTitle: String, pastVerb: String, retrieve: Boolean) {
         if (actionInFlight || listing) return
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = currentOrg() ?: return
         val root = sfdxRoot() ?: return
         val targets = checkedRows().filter { if (retrieve) it.org else it.local }
         if (targets.isEmpty()) return
@@ -385,7 +411,9 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
                 }
                 notifySourceOutcome(project, org, pastVerb, fileCount, failureLines, hardError)
                 if (retrieve && fileCount > 0) {
+                    // VFS refresh is project-level — runs even after the dialog closed.
                     ApplicationManager.getApplication().invokeLater {
+                        if (project.isDisposed) return@invokeLater
                         LocalFileSystem.getInstance().findFileByNioFile(root)?.let {
                             VfsUtil.markDirtyAndRefresh(true, true, true, it)
                         }
@@ -403,7 +431,7 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
     private fun compareChecked() {
         if (actionInFlight || listing) return
         val row = checkedRows().singleOrNull() ?: return
-        val org = OrgService.get(project).requireCurrent() ?: return
+        val org = currentOrg() ?: return
         val root = sfdxRoot() ?: return
         val ref = toolingRefForTypeName(row.type, row.name) ?: return
         val file = row.localPath?.let { LocalFileSystem.getInstance().findFileByPath(it) } ?: return
@@ -418,6 +446,7 @@ class MetadataBrowserPanel(private val project: Project) : Disposable {
     companion object {
         private const val ALL = "All"
         private const val TYPES_KEY = "sfToolkit.metadata.types"
+        private const val EXPAND_ALL_LIMIT = 500
 
         // ~45 chars per --metadata pair × 100 stays far under the ~32k Windows limit.
         private const val COMPONENTS_PER_CALL = 100

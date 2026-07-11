@@ -23,7 +23,9 @@ class OrgCombo(
 ) : Disposable {
 
     val combo = ComboBox<String>().apply {
-        toolTipText = "Org to run against (also updates the project-wide selection)"
+        toolTipText =
+            if (syncToProject) "Org to run against (also updates the project-wide selection)"
+            else "Org this tab runs against (does not change the project org)"
         setMinimumAndPreferredWidth(220)
     }
     val refreshButton = JButton(AllIcons.Actions.Refresh).apply {

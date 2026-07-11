@@ -52,9 +52,11 @@ class DownloadApexLsAction : DumbAwareAction() {
                                 Files.newOutputStream(target).use { input.copyTo(it) }
                             }
                         }
+                        val started = tryStartApexLs(project)
                         group.createNotification(
                             "Apex Language Server installed ($version)",
-                            "Reopen the project (or restart the IDE) to activate Apex completion.",
+                            if (started) "Apex completion is active — open a .cls file."
+                            else "Reopen the project (or restart the IDE) to activate Apex completion.",
                             NotificationType.INFORMATION,
                         ).notify(project)
                     } finally {
@@ -70,6 +72,20 @@ class DownloadApexLsAction : DumbAwareAction() {
                 }
             }
         }.queue()
+    }
+
+    /**
+     * Start the LS right away instead of demanding a restart. Reflective: LSP4IJ is an
+     * optional dependency, so its classes may be absent from this classloader at runtime.
+     */
+    private fun tryStartApexLs(project: com.intellij.openapi.project.Project): Boolean = try {
+        val mgr = Class.forName("com.redhat.devtools.lsp4ij.LanguageServerManager")
+        val instance = mgr.getMethod("getInstance", com.intellij.openapi.project.Project::class.java)
+            .invoke(null, project)
+        mgr.getMethod("start", String::class.java).invoke(instance, "apexLsp")
+        true
+    } catch (_: Throwable) {
+        false
     }
 
     companion object {
